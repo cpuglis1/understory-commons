@@ -1,0 +1,41 @@
+[project]
+name = "understory-commons"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=5.0,<6.0",
+    "psycopg[binary]>=3.1",
+    "gunicorn",
+    "python-decouple",
+    "anthropic",
+    "whitenoise",
+    "dj-database-url",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-django",
+    "ruff",
+    "black",
+    "pre-commit",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ", "SIM", "T201"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "understory_commons.settings.dev"
+python_files = ["test_*.py"]
+markers = [
+    "live: marks tests that call the Anthropic API (deselect with '-m not live')",
+]
