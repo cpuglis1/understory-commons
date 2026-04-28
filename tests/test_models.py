@@ -51,6 +51,26 @@ def test_user_email_unique():
         )
 
 
+@pytest.mark.django_db
+def test_organization_timestamps():
+    org = Organization.objects.create(name="Timestamps CBO")
+    assert org.pk is not None
+    assert org.created_at is not None
+    assert org.updated_at is not None
+    assert str(org) == "Timestamps CBO"
+
+
+@pytest.mark.django_db
+def test_organization_updated_at_changes_on_save():
+    org = Organization.objects.create(name="Before")
+    t1 = org.updated_at
+    org.name = "After"
+    org.save()
+    org.refresh_from_db()
+    assert org.updated_at >= t1
+    assert org.name == "After"
+
+
 def test_create_superuser_raises():
     with pytest.raises(NotImplementedError):
         User.objects.create_superuser(email="su@example.com", display_name="Super")
