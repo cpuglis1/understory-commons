@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Add Facilitator{% endblock %}
+{% block content %}
+<h1>Add Facilitator</h1>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Create &amp; generate login link</button>
+</form>
+{% endblock %}

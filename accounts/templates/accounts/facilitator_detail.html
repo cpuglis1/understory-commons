@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ facilitator.display_name }}{% endblock %}
+{% block content %}
+<h1>{{ facilitator.display_name }}</h1>
+<p>Email: {{ facilitator.email }}</p>
+<p>Status: {% if facilitator.is_active %}Active{% else %}Inactive{% endif %}</p>
+
+{% if magic_url %}
+<h2>New login link</h2>
+<p>Copy and send via your usual channel. Expires in 7 days.</p>
+<input id="magic-link" type="text" value="{{ magic_url }}" readonly
+       style="width:100%;font-family:monospace;">
+<button onclick="navigator.clipboard.writeText(document.getElementById('magic-link').value)">Copy link</button>
+{% endif %}
+
+<h2>Actions</h2>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit">Generate new login link</button>
+</form>
+<p><a href="{% url 'accounts:facilitator_new' %}">Add another facilitator</a></p>
+{% endblock %}

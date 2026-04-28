@@ -1,10 +1,13 @@
 from django.contrib.auth import login
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import MagicLinkToken
+from .decorators import coordinator_required
+from .forms import FacilitatorCreateForm
+from .models import MagicLinkToken, User
+from .services import magic_link_url, mint_magic_link
 
 
 def magic_login(request: HttpRequest, token: str) -> HttpResponse:
@@ -24,3 +27,48 @@ def magic_login(request: HttpRequest, token: str) -> HttpResponse:
 
     login(request, magic_token.user, backend="accounts.backends.MagicLinkBackend")
     return redirect("/")
+
+
+@coordinator_required
+def facilitator_new(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = FacilitatorCreateForm(request.POST, coordinator=request.user)
+        if form.is_valid():
+            facilitator = User.objects.create_user(
+                email=form.cleaned_data["email"],
+                display_name=form.cleaned_data["display_name"],
+                organization=request.user.organization,
+                role=User.FACILITATOR,
+            )
+            for program in form.cleaned_data["programs"]:
+                program.facilitators.add(facilitator)
+            token = mint_magic_link(user=facilitator, created_by=request.user)
+            return render(
+                request,
+                "accounts/facilitator_link.html",
+                {"facilitator": facilitator, "magic_url": magic_link_url(token)},
+            )
+    else:
+        form = FacilitatorCreateForm(coordinator=request.user)
+
+    return render(request, "accounts/facilitator_new.html", {"form": form})
+
+
+@coordinator_required
+def facilitator_detail(request: HttpRequest, pk) -> HttpResponse:
+    facilitator = get_object_or_404(
+        User,
+        pk=pk,
+        organization=request.user.organization,
+        role=User.FACILITATOR,
+    )
+    magic_url = None
+    if request.method == "POST":
+        token = mint_magic_link(user=facilitator, created_by=request.user)
+        magic_url = magic_link_url(token)
+
+    return render(
+        request,
+        "accounts/facilitator_detail.html",
+        {"facilitator": facilitator, "magic_url": magic_url},
+    )

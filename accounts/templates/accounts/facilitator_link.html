@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Login Link — {{ facilitator.display_name }}{% endblock %}
+{% block content %}
+<h1>Facilitator created</h1>
+<p><strong>{{ facilitator.display_name }}</strong> ({{ facilitator.email }}) has been added.</p>
+<p>Copy the link below and send it via your usual channel. The link expires in 7 days.</p>
+<input id="magic-link" type="text" value="{{ magic_url }}" readonly
+       style="width:100%;font-family:monospace;">
+<button onclick="navigator.clipboard.writeText(document.getElementById('magic-link').value)">Copy link</button>
+<p><a href="{% url 'accounts:facilitator_detail' facilitator.pk %}">View facilitator profile</a></p>
+{% endblock %}
