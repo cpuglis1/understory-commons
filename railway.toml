@@ -1,0 +1,7 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "gunicorn understory_commons.wsgi --log-file -"
+healthcheckPath = "/healthz/"
+restartPolicyType = "ON_FAILURE"
