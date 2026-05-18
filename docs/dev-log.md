@@ -1,1 +1,2 @@
 2026-05-18 | grants-ingest planning | opus-4.7 | ~30k | ADR-001 committed; plan for grants_ingest funder-registry slice (irs_990pf + propublica_np) | impl deferred; 3 blocking questions for Chris
+2026-05-18 | grants-ingest impl-1 | sonnet-4.6 | ~40k | commits 1-5 (scaffold, object store, RawRecord, CorpusEvent, Funder/Program models + migrations); 15 tests passing | stopped mid-commit-5 (tests missing); commits 6-15 queued
