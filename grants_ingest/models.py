@@ -5,6 +5,7 @@ Models are defined in sub-modules and imported here for Django's app registry.
 """
 
 from .corpus_event import CorpusEvent, CorpusEventType
+from .historical_grant import HistoricalGrant
 from .raw_record import RawRecord
 from .registry import (
     Funder,
@@ -23,6 +24,7 @@ __all__ = [
     "Funder",
     "FunderAlias",
     "FunderType",
+    "HistoricalGrant",
     "Program",
     "ProgramAlias",
     "ProgramType",
