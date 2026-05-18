@@ -1,0 +1,159 @@
+# DMV-region private foundations — seed list for grants_ingest funder registry.
+#
+# EINs here drive propublica_np and irs_990pf adapter runs.
+# Source: ProPublica Nonprofit Explorer, IRS BMF, foundation annual reports.
+# Curate: add/remove EINs before each registry refresh; keep notes field current.
+# EIN format: 9-digit, no dashes (stored as string to preserve leading zeros).
+#
+# IMPORTANT: this list is a starting scaffold — verify each EIN against ProPublica
+# or IRS BMF before treating as authoritative. Some EINs below may need updating.
+
+- ein: "520781390"
+  name: "Eugene and Agnes E. Meyer Foundation"
+  state: DC
+  notes: "General community foundation, DC-focused grantmaking"
+
+- ein: "526051781"
+  name: "Morris and Gwendolyn Cafritz Foundation"
+  state: DC
+  notes: "DC community grantmaker; arts, education, community services"
+
+- ein: "521322276"
+  name: "Community Foundation for the National Capital Region"
+  state: DC
+  notes: "Umbrella community foundation, donor-advised funds"
+
+- ein: "521595975"
+  name: "Philip L. Graham Fund"
+  state: DC
+  notes: "Education and journalism grantmaker"
+
+- ein: "526006287"
+  name: "Naomi and Nehemiah Cohen Foundation"
+  state: DC
+  notes: "Small DC-area funder; education and social services"
+
+- ein: "526034733"
+  name: "Hitachi Foundation"
+  state: DC
+  notes: "Workforce and economic development focus"
+
+- ein: "311786308"
+  name: "Crimsonbridge Foundation"
+  state: DC
+  notes: "Education and community development, DC metro"
+
+- ein: "526029891"
+  name: "Public Welfare Foundation"
+  state: DC
+  notes: "Criminal justice and worker rights; some education crossover"
+
+- ein: "526005497"
+  name: "Dimick Foundation"
+  state: DC
+  notes: "DC-area youth and education focus"
+
+- ein: "521595753"
+  name: "Bainum Family Foundation"
+  state: MD
+  notes: "Early childhood and youth education, Montgomery County MD"
+
+- ein: "526006399"
+  name: "Abel Foundation"
+  state: MD
+  notes: "MD/DC region; arts and education"
+
+- ein: "521520832"
+  name: "Town Creek Foundation"
+  state: MD
+  notes: "Environmental and community development"
+
+- ein: "526068327"
+  name: "Abell Foundation"
+  state: MD
+  notes: "Baltimore-focused; education, economic dev, poverty"
+
+- ein: "526053965"
+  name: "France-Merrick Foundation"
+  state: MD
+  notes: "Arts and education, Maryland"
+
+- ein: "526072963"
+  name: "Harry and Jeanette Weinberg Foundation"
+  state: MD
+  notes: "Large MD-based funder; poverty, education, community"
+
+- ein: "526007550"
+  name: "Shelter Foundation"
+  state: MD
+  notes: "Housing and community services, MD"
+
+- ein: "521391279"
+  name: "Prince Charitable Trusts"
+  state: VA
+  notes: "DC metro and Chicago; environment and community"
+
+- ein: "541563265"
+  name: "Community Foundation for Northern Virginia"
+  state: VA
+  notes: "NoVA umbrella community foundation"
+
+- ein: "541612828"
+  name: "Northern Virginia Health Foundation"
+  state: VA
+  notes: "Health and education, Northern Virginia"
+
+- ein: "541700076"
+  name: "Greater Washington Community Foundation — Virginia"
+  state: VA
+  notes: "Regional grantmaking arm"
+
+- ein: "541760157"
+  name: "Inova Health Foundation"
+  state: VA
+  notes: "Health-focused; some education/youth crossover"
+
+- ein: "541414994"
+  name: "Gannett Foundation"
+  state: VA
+  notes: "Education and community, national scope from McLean VA"
+
+- ein: "520963580"
+  name: "Wallace Genetic Foundation"
+  state: VA
+  notes: "Environment and sustainable agriculture"
+
+- ein: "541552951"
+  name: "Freddie Mac Foundation"
+  state: VA
+  notes: "NOTE: no longer active; verify before running"
+
+- ein: "541736465"
+  name: "Potomac Conservancy"
+  state: VA
+  notes: "Environment focus; not a typical grantmaker — verify scope"
+
+- ein: "526049994"
+  name: "Clark Enterprises Foundation"
+  state: MD
+  notes: "Construction and development family funder, DC region"
+
+- ein: "526031306"
+  name: "Herman and Frieda L. Miller Foundation"
+  state: MD
+  notes: "Baltimore-area funder, education and health"
+
+- ein: "521740243"
+  name: "Eugene B. Casey Foundation"
+  state: MD
+  notes: "Maryland; education, arts, community services"
+
+- ein: "526073459"
+  name: "Jacob and Annita France Foundation"
+  state: MD
+  notes: "Baltimore-area; arts and education"
+
+- ein: "526004484"
+  name: "Robert A. McNamara Foundation"
+  state: DC
+  notes: "Placeholder — verify EIN before use"
