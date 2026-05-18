@@ -1,0 +1,27 @@
+{
+  "organization": {
+    "ein": 990000040,
+    "name": "Synthetic Youth Foundation for Testing",
+    "address": "1 Test Lane",
+    "city": "Springfield",
+    "state": "DC",
+    "zipcode": "20001",
+    "ntee_code": "B90",
+    "subseccd": 92,
+    "totrevenue": 5000000
+  },
+  "filings_with_data": [
+    {
+      "tax_prd_yr": 2022,
+      "totrevenue": 4800000,
+      "formtype_url": "https://example.com/990pf_2022.xml",
+      "pdf": null
+    },
+    {
+      "tax_prd_yr": 2021,
+      "totrevenue": 4200000,
+      "formtype_url": "https://example.com/990pf_2021.xml",
+      "pdf": null
+    }
+  ]
+}
