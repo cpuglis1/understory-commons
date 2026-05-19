@@ -200,3 +200,31 @@ def test_parse_ntee_null_does_not_crash(store, event_log, tmp_path):
     event_type, payload = events[0]
     assert event_type == CorpusEventType.FUNDER_UPSERTED
     assert "ntee" not in payload["notes"]
+
+
+@pytest.mark.django_db
+def test_parse_subsection_code_field_name(store, event_log, tmp_path):
+    """ProPublica returns subsection_code not subseccd — Bug 2 regression."""
+    raw = _store_synthetic_org(
+        store,
+        tmp_path,
+        {"subsection_code": "3", "ntee_code": "T30"},
+        ein="990000092",
+    )
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    _, payload = adapter.parse(raw)[0]
+    assert payload["notes"]["irs_subsection"] == "3"
+
+
+@pytest.mark.django_db
+def test_parse_subsection_code_92_infers_private_foundation(store, event_log, tmp_path):
+    """subsection_code=92 via real API field name must yield funder_type=private_foundation."""
+    raw = _store_synthetic_org(
+        store,
+        tmp_path,
+        {"subsection_code": "92", "ntee_code": "T20"},
+        ein="990000093",
+    )
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    _, payload = adapter.parse(raw)[0]
+    assert payload["funder_type"] == "private_foundation"
