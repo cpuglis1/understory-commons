@@ -74,7 +74,7 @@ SITE_URL = config("SITE_URL", default="http://localhost:8000")
 
 # --- Grants ingest ---
 RAW_OBJECT_STORE_BACKEND = config("RAW_OBJECT_STORE_BACKEND", default="fs")
-RAW_OBJECT_STORE_FS_PATH = config("RAW_OBJECT_STORE_FS_PATH", default="/var/lib/uc-corpus")
+RAW_OBJECT_STORE_FS_PATH = config("RAW_OBJECT_STORE_FS_PATH", default="/tmp/uc-corpus")
 RAW_OBJECT_STORE_S3_BUCKET = config("RAW_OBJECT_STORE_S3_BUCKET", default="")
 
 LOGGING = {
