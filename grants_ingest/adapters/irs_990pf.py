@@ -73,6 +73,20 @@ class IRS990PFAdapter(BaseAdapter):
             logger.error("irs_990pf: XML parse error for %s: %s", raw.content_sha, exc)
             return [(CorpusEventType.PARSE_FAILED, {"error": str(exc), "sha": raw.content_sha})]
 
+        if root.tag == "Error":
+            error_code = _find_text(root, "Code", ns={}) or "unknown"
+            logger.warning(
+                "irs_990pf: S3 returned error '%s' for %s — object_id may be wrong",
+                error_code,
+                raw.fetch_url,
+            )
+            return [
+                (
+                    CorpusEventType.PARSE_FAILED,
+                    {"error": f"S3:{error_code}", "sha": raw.content_sha},
+                )
+            ]
+
         events: list[tuple[CorpusEventType, dict]] = []
 
         filer_ein = _find_filer_ein(root)

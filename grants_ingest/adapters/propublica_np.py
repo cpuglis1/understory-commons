@@ -16,6 +16,7 @@ import json
 import logging
 from collections.abc import Iterable
 from typing import ClassVar
+from urllib.parse import parse_qs, unquote, urlparse
 
 from grants_ingest.corpus_event import CorpusEventType
 from grants_ingest.raw_record import RawRecord
@@ -76,6 +77,7 @@ class ProPublicaNPAdapter(BaseAdapter):
         name = org.get("name", "")
         ntee = org.get("ntee_code") or ""
         subsection = str(org.get("subsection_code") or org.get("subseccd") or "")
+        foundation_code = org.get("foundation_code")
 
         notes: dict = {}
         if ntee:
@@ -103,33 +105,75 @@ class ProPublicaNPAdapter(BaseAdapter):
         if annual_revenue:
             notes["annual_revenue"] = annual_revenue
 
-        # Store the filings index for the irs_990pf adapter to consume
-        filings = [
-            {
-                "year": f.get("tax_prd_yr"),
-                "xml_url": f.get("formtype_url") or f.get("pdf"),
-            }
-            for f in data.get("filings_with_data", [])
-            if f.get("formtype_url") or f.get("pdf")
-        ]
+        # Build filings_index: 990-PF e-file XML URLs for the irs_990pf adapter.
+        # ProPublica encodes e-filed documents as pdf_url with the IRS object_id
+        # embedded as the last '_'-delimited filename component. We reconstruct
+        # the canonical IRS S3 XML URL from that object_id.
+        filings: list[dict] = []
+        seen_urls: set[str] = set()
+        for source_key in ("filings_with_data", "filings_without_data"):
+            for f in data.get(source_key, []):
+                if f.get("formtype") != 2:
+                    continue
+                object_id = _extract_object_id(f.get("pdf_url") or "")
+                if not object_id:
+                    continue
+                xml_url = f"https://s3.amazonaws.com/irs-form-990/{object_id}_public.xml"
+                if xml_url in seen_urls:
+                    continue
+                seen_urls.add(xml_url)
+                filings.append({"year": f.get("tax_prd_yr"), "xml_url": xml_url})
         if filings:
             notes["filings_index"] = filings
 
         payload = {
             "ein": ein,
             "canonical_name": name,
-            "funder_type": _infer_funder_type(subsection, ntee),
+            "funder_type": _infer_funder_type(subsection, ntee, foundation_code),
             "notes": notes,
         }
         return [(CorpusEventType.FUNDER_UPSERTED, payload)]
 
 
-def _infer_funder_type(subsection: str, ntee: str) -> str:
-    """Best-effort funder_type from IRS subsection + NTEE codes."""
+def _infer_funder_type(subsection: str, ntee: str, foundation_code: int | None) -> str:
+    """Best-effort funder_type from IRS subsection + NTEE codes + ProPublica foundation_code.
+
+    Priority order:
+    1. subsection == '92'  — IRS BMF encoding for private foundations (highest confidence)
+    2. foundation_code not in (None, 15)  — ProPublica: 3=operating PF, 4=non-operating PF;
+       15 explicitly means 'not a private foundation'
+    3. ntee starts with 'T3'  — NTEE community foundation code
+    4. subsection in ('3', '03')  — 501(c)(3), public charity
+    """
     if subsection == "92":
+        return "private_foundation"
+    if foundation_code is not None and foundation_code != 15:
         return "private_foundation"
     if ntee.startswith("T3"):
         return "community_foundation"
     if subsection in ("3", "03"):
         return "public_charity"
     return "unknown"
+
+
+def _extract_object_id(pdf_url: str) -> str | None:
+    """Extract IRS e-file object_id from a ProPublica pdf_url.
+
+    ProPublica encodes e-filed documents as:
+      .../download-filing?path=.../{EIN}_{period}_{FORMTYPE}_{object_id}.pdf
+
+    The object_id is a 16-digit numeric string. Old pre-e-file URLs use a
+    6-digit YYYYMM period code as the last component and return None.
+    """
+    try:
+        parsed = urlparse(pdf_url)
+        path = unquote(parse_qs(parsed.query).get("path", [""])[0])
+        filename = path.rsplit("/", 1)[-1]
+        stem = filename.rsplit(".", 1)[0]
+        parts = stem.split("_")
+        candidate = parts[-1] if parts else ""
+        if candidate.isdigit() and len(candidate) >= 10:
+            return candidate
+    except Exception:
+        pass
+    return None

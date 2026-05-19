@@ -110,7 +110,13 @@ def test_parse_filings_index_in_notes(store, event_log, raw_record):
     _, payload = adapter.parse(raw_record)[0]
     filings = payload["notes"]["filings_index"]
     assert len(filings) == 2
-    assert filings[0]["xml_url"] == "https://example.com/990pf_2022.xml"
+    # object_id extracted from pdf_url → canonical IRS S3 XML URL
+    assert (
+        filings[0]["xml_url"] == "https://s3.amazonaws.com/irs-form-990/2022050112345678_public.xml"
+    )
+    assert (
+        filings[1]["xml_url"] == "https://s3.amazonaws.com/irs-form-990/2021050187654321_public.xml"
+    )
 
 
 @pytest.mark.django_db
@@ -267,3 +273,127 @@ def test_parse_error_response_emits_no_events(store, event_log, tmp_path):
     events = adapter.parse(raw)
     assert events == []
     assert Funder.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_parse_foundation_code_4_infers_private_foundation(store, event_log, tmp_path):
+    """foundation_code=4 (non-operating PF) must yield funder_type=private_foundation (Bug 8)."""
+    raw = _store_synthetic_org(
+        store,
+        tmp_path,
+        {"subsection_code": "3", "foundation_code": 4, "ntee_code": "T20"},
+        ein="990000095",
+    )
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    _, payload = adapter.parse(raw)[0]
+    assert payload["funder_type"] == "private_foundation"
+
+
+@pytest.mark.django_db
+def test_parse_foundation_code_3_infers_private_foundation(store, event_log, tmp_path):
+    """foundation_code=3 (operating PF) must also yield funder_type=private_foundation (Bug 8)."""
+    raw = _store_synthetic_org(
+        store,
+        tmp_path,
+        {"subsection_code": "3", "foundation_code": 3},
+        ein="990000096",
+    )
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    _, payload = adapter.parse(raw)[0]
+    assert payload["funder_type"] == "private_foundation"
+
+
+@pytest.mark.django_db
+def test_parse_foundation_code_15_infers_public_charity(store, event_log, tmp_path):
+    """foundation_code=15 ('not a private foundation') must NOT yield private_foundation."""
+    raw = _store_synthetic_org(
+        store,
+        tmp_path,
+        {"subsection_code": "3", "foundation_code": 15},
+        ein="990000097",
+    )
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    _, payload = adapter.parse(raw)[0]
+    assert payload["funder_type"] == "public_charity"
+
+
+@pytest.mark.django_db
+def test_parse_filings_index_excludes_non_pf_formtype(store, event_log, tmp_path):
+    """filings_with_data entries with formtype != 2 must not appear in filings_index."""
+    import json
+
+    body = json.dumps(
+        {
+            "organization": {
+                "ein": "990000098",
+                "name": "Public Charity Filing Test",
+                "subsection_code": "3",
+                "foundation_code": 15,
+            },
+            "filings_with_data": [
+                {
+                    "tax_prd_yr": 2022,
+                    "formtype": 0,
+                    "pdf_url": "https://projects.propublica.org/nonprofits/download-filing?path=IRS%2F990000098_202204_990_2022050199999999.pdf",
+                    "totrevenue": 100000,
+                }
+            ],
+            "filings_without_data": [],
+        }
+    ).encode()
+    sha = __import__("hashlib").sha256(body).hexdigest()
+    from django.utils import timezone
+
+    from grants_ingest.models import RawRecord as RR
+
+    sidecar = {
+        "source_id": "propublica_np",
+        "mime_type": "application/json",
+        "http_status": 200,
+        "fetch_url": "https://example.com/organizations/990000098.json",
+        "fetched_at": "2026-01-01T00:00:00",
+    }
+    store.put(sha, body, sidecar)
+    raw = RR.objects.create(
+        content_sha=sha,
+        fetch_url=sidecar["fetch_url"],
+        fetched_at=timezone.now(),
+        source_id="propublica_np",
+        mime_type="application/json",
+        content_ref=store.uri_for(sha, source_id="propublica_np"),
+        http_status=200,
+    )
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    _, payload = adapter.parse(raw)[0]
+    assert "filings_index" not in payload["notes"]
+
+
+def test_extract_object_id_new_format():
+    """New-format ProPublica pdf_url yields a 16-digit object_id."""
+    from grants_ingest.adapters.propublica_np import _extract_object_id
+
+    url = "https://projects.propublica.org/nonprofits/download-filing?path=IRS%2F526036989_202404_990PF_2025010222973793.pdf"
+    assert _extract_object_id(url) == "2025010222973793"
+
+
+def test_extract_object_id_download990pdf_format():
+    """download990pdf path variant also yields the correct object_id."""
+    from grants_ingest.adapters.propublica_np import _extract_object_id
+
+    url = "https://projects.propublica.org/nonprofits/download-filing?path=download990pdf_01_2024_prefixes_52-54%2F526036989_202304_990PF_2024011722244739.pdf"
+    assert _extract_object_id(url) == "2024011722244739"
+
+
+def test_extract_object_id_old_format_returns_none():
+    """Old pre-e-file pdf_url format (no object_id, 6-digit period code) returns None."""
+    from grants_ingest.adapters.propublica_np import _extract_object_id
+
+    url = "https://projects.propublica.org/nonprofits/download-filing?path=2016_10_PF%2F52-6036989_990PF_201604.pdf"
+    assert _extract_object_id(url) is None
+
+
+def test_extract_object_id_empty_returns_none():
+    """Empty string returns None without raising."""
+    from grants_ingest.adapters.propublica_np import _extract_object_id
+
+    assert _extract_object_id("") is None
