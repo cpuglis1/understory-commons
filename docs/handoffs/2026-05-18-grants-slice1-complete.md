@@ -125,38 +125,53 @@ These cause no harm. The object store is content-addressed and orphaned blobs ar
 
 ---
 
+## Known limitations (accepted, deferred)
+
+### IRS 990-PF XML fetch non-functional — `HistoricalGrant` table is empty
+
+**Summary:** The IRS 990-PF ingest path does not produce any `HistoricalGrant` rows. The root cause is that the numeric suffix in ProPublica's `pdf_url` field (e.g. `2025010222973793`) is a ProPublica-internal 16-digit ID, not the 18-digit IRS `ObjectId` used as the key in the IRS S3 e-file bucket. All 26 constructed S3 URLs return `NoSuchKey`.
+
+**Current state:**
+- `filings_index` is populated for 26/29 Funders with ProPublica filing metadata (year, formtype, and the 16-digit suffix parsed from `pdf_url`).
+- The IRS 990-PF adapter correctly constructs and attempts `https://s3.amazonaws.com/irs-form-990/{id}_public.xml` URLs.
+- All attempts return HTTP 403 / `NoSuchKey` because the 16-digit ID does not map to a real IRS S3 key. 0 XML fetches succeed. `HistoricalGrant` count = 0.
+
+**Why this is acceptable for merge:**
+`HistoricalGrant` rows feed Component 6 (outcome-conditioned ranking). Component 6 is not on the current critical path — the immediate need is the funder registry and grant solicitation corpus. The ProPublica ingest path (Funder, FunderAlias, provenance chain) is fully verified. Merging slice 1 without `HistoricalGrant` rows does not block slice 2 work.
+
+**Resolution deferred to a future slice** when Component 6 work begins. Candidate approaches:
+
+1. **IRS EFTS (Full-Text Search) API** — `efts.irs.gov/LATEST/search?q=...&dateRange=custom&startDate=...&forms=990-PF` returns JSON with `object_id` fields (18-digit) that construct correct S3 keys. Queryable by EIN. Lower blast radius than the index approach.
+2. **IRS annual index JSON** — `https://s3.amazonaws.com/irs-form-990/index_{YEAR}.json` enumerates every e-filed return for a year, keyed by EIN. Large files (~100MB/year for all form types); pre-filter by EIN and `FormType=990PF` to avoid loading the whole index.
+
+Either approach replaces the `filings_index`-from-ProPublica URL construction. The XML parse logic in `irs_990pf.py` is sound; only the URL sourcing needs to change. The `_extract_object_id` helper from commit `5e86aff` can be removed or repurposed when the correct ID source is in place.
+
+**Provenance check deferred:** The end-to-end HistoricalGrant provenance trace (grant row → content_sha → event log → raw XML → field value) cannot be run until a successful IRS XML fetch occurs. This should be the first verification step in the slice that unblocks the IRS path.
+
+---
+
 ## Open questions for you
 
-1. **Bug 7 fix strategy — IRS e-file index approach.** The proposed fix above replaces `filings_index`-from-ProPublica with direct IRS e-file index lookup. Confirm this is the intended approach for slice 2 before I scope the work. The IRS index files are large (one JSON per year with all e-filed 990-PFs); we would want to pre-filter by EIN rather than ingest the whole index.
+1. **`RAW_OBJECT_STORE_FS_PATH` env var.** Currently there is no `.env` file and the variable must be set manually per session. Before slice 2 adds more management commands, a `.env.dev.example` or Django settings fallback would reduce friction.
 
-2. **`foundation_code` fix timing.** Bug 8 (`funder_type` misclassification) is surgical and low-risk. Should this go into slice 1 before merge, or wait for slice 2? It's a 3-line change in `propublica_np.py` plus a test update.
-
-3. **`RAW_OBJECT_STORE_FS_PATH` env var.** Currently there is no `.env` file and the variable must be set manually per session. The open question from the bug-bash about a dev default path (`~/Library/Application Support/uc-corpus` or a `.env.dev` template) is still unresolved. Before slice 2 adds more management commands, a `.env.dev.example` or Django settings fallback would reduce friction.
-
-4. **HistoricalGrant provenance check deferred.** The end-to-end provenance check for HistoricalGrant (pick a grant row, trace content_sha from event log back to raw XML, verify field value) could not be performed because `fetched=0` from the IRS run. This check should be the first verification step in the next session once Bug 7 is fixed.
-
-5. **`subsection_code` for "not a private foundation" orgs.** Several orgs in the seed have `forms={0}` in ProPublica's `filings_with_data` (Summit Fund, Greater Washington Community Foundation, Jack and Jill of America Foundation). The `formtype=0` integer is unexplained. These orgs may be 990-N filers, pre-e-file paper filers, or something else. Once the IRS index approach is in place for slice 2, these orgs may simply have no 990-PF XML to fetch, which is fine.
+2. **`subsection_code` for "not a private foundation" orgs.** Several orgs in the seed have `forms={0}` in ProPublica's `filings_with_data` (Summit Fund, Greater Washington Community Foundation, Jack and Jill of America Foundation). The `formtype=0` integer is unexplained. Once the IRS index approach is in place, these orgs may simply have no 990-PF XML to fetch, which is fine.
 
 ---
 
 ## Merge readiness
 
-**NOT READY. One blocker.**
+**READY. IRS 990-PF / HistoricalGrant limitation documented and accepted.**
 
 | Item | Status |
 |---|---|
 | ProPublica ingest path (fetch → store → events → Funder) | ✓ Verified |
-| All 5 bug-bash fixes working against real data | ✓ Verified |
+| All 5 bug-bash fixes + Bug 8 (`foundation_code`) working against real data | ✓ Verified |
 | Production seed quality (all 29 EINs resolve) | ✓ Verified |
 | Provenance chain (seen → funder_upserted → Funder) | ✓ Verified |
-| IRS 990-PF ingest path (fetch → store → events → HistoricalGrant) | ✗ Blocked by Bug 7 |
-| HistoricalGrant provenance check | ✗ Cannot run (0 rows) |
-| `resolve_entities` against real data | ✗ Not testable (0 HistoricalGrant rows) |
+| IRS 990-PF ingest path (fetch → store → events → HistoricalGrant) | ⚠ Non-functional (IRS ObjectId sourcing issue) — deferred, see Known Limitations |
+| HistoricalGrant provenance check | ⚠ Deferred (0 rows until IRS path unblocked) |
+| `resolve_entities` against real data | ⚠ Deferred (0 HistoricalGrant rows to resolve) |
 
-**Blocker:** Bug 7 — `filings_index` construction uses wrong/non-existent field names, causing the IRS 990-PF run to always produce `fetched=0` and `HistoricalGrant` count = 0. The slice-1 goal ("running `ingest_run --source irs_990pf` populates `HistoricalGrant` tables") is not met.
+**The IRS 990-PF / HistoricalGrant gap is a known, scoped limitation that feeds a downstream component (Component 6 / outcome ranking) not on the current critical path.** The funder registry — the primary slice-1 deliverable — is complete and verified. The limitation is documented above with candidate resolution approaches for the future slice.
 
-**Soft warnings:**
-- Bug 8 (`funder_type` misclassification) — surgical fix available, low risk
-- No `.env.dev` default for `RAW_OBJECT_STORE_FS_PATH` makes local dev friction higher than necessary
-
-Fix Bug 7, re-run the IRS step, verify HistoricalGrant provenance chain, then merge.
+**Soft note:** No `.env.dev` default for `RAW_OBJECT_STORE_FS_PATH` — carry this into slice 2 setup steps.
