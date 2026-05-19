@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from grants_ingest.corpus_event import CorpusEvent, CorpusEventType
 from grants_ingest.materialize import apply_events
-from grants_ingest.models import Funder, HistoricalGrant, RawRecord
+from grants_ingest.models import Funder, HistoricalGrant, OpportunityInstance, RawRecord
 
 
 def _event(event_type, payload, content_sha=""):
@@ -133,3 +133,85 @@ def test_replay_from_zero_rebuilds_state():
 
     apply_events(since_event_id=0)
     assert Funder.objects.filter(ein="990000024").exists()
+
+
+# --- OpportunityInstance materializer tests ---
+
+
+def _opp_seen_payload(
+    source_id="pnd_rfp",
+    external_id="pnd_rfp:guid-001",
+    title="Youth Arts Grant",
+    sha=None,
+):
+    return {
+        "source_id": source_id,
+        "external_id": external_id,
+        "title": title,
+        "funder_name_raw": "Synthetic Arts Foundation",
+        "notes": {"pnd_guid": "guid-001"},
+        "content_sha": sha or "",
+    }
+
+
+@pytest.mark.django_db
+def test_opportunity_seen_creates_row():
+    _event(CorpusEventType.OPPORTUNITY_SEEN, _opp_seen_payload())
+    apply_events()
+    assert OpportunityInstance.objects.filter(external_id="pnd_rfp:guid-001").exists()
+
+
+@pytest.mark.django_db
+def test_opportunity_seen_idempotent():
+    """Applying OPPORTUNITY_SEEN twice produces exactly one row."""
+    payload = _opp_seen_payload()
+    _event(CorpusEventType.OPPORTUNITY_SEEN, payload)
+    _event(CorpusEventType.OPPORTUNITY_SEEN, payload)
+    apply_events()
+    assert OpportunityInstance.objects.filter(external_id="pnd_rfp:guid-001").count() == 1
+
+
+@pytest.mark.django_db
+def test_opportunity_seen_links_raw_record():
+    _raw_record(sha="a" * 64)
+    payload = _opp_seen_payload(sha="a" * 64)
+    _event(CorpusEventType.OPPORTUNITY_SEEN, payload)
+    apply_events()
+    opp = OpportunityInstance.objects.get(external_id="pnd_rfp:guid-001")
+    assert opp.source_records.filter(content_sha="a" * 64).exists()
+
+
+@pytest.mark.django_db
+def test_opportunity_updated_changes_close_date():
+    _event(CorpusEventType.OPPORTUNITY_SEEN, _opp_seen_payload())
+    apply_events()
+
+    updated_payload = {
+        **_opp_seen_payload(),
+        "application_close_at": "2026-09-01T00:00:00Z",
+    }
+    _event(CorpusEventType.OPPORTUNITY_UPDATED, updated_payload)
+    apply_events()
+
+    opp = OpportunityInstance.objects.get(external_id="pnd_rfp:guid-001")
+    assert opp.application_close_at is not None
+    assert str(opp.application_close_at.year) == "2026"
+
+
+@pytest.mark.django_db
+def test_opportunity_replay_from_zero():
+    """Drop OpportunityInstance rows, replay from 0 — state is restored."""
+    _event(
+        CorpusEventType.OPPORTUNITY_SEEN,
+        _opp_seen_payload(
+            source_id="grants_gov",
+            external_id="grants_gov:99001",
+            title="Federal Youth Education Grant",
+        ),
+    )
+    apply_events()
+    assert OpportunityInstance.objects.filter(external_id="grants_gov:99001").exists()
+
+    OpportunityInstance.objects.filter(external_id="grants_gov:99001").delete()
+    apply_events(since_event_id=0)
+    assert OpportunityInstance.objects.filter(external_id="grants_gov:99001").exists()
