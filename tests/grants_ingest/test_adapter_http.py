@@ -239,3 +239,64 @@ def test_run_stored_new_counts_correctly(tmp_path):
     assert result1.stored_new == 1
     assert result2.fetched == 1
     assert result2.stored_new == 0
+
+
+@pytest.mark.django_db
+def test_run_parse_errors_incremented(tmp_path):
+    """parse() exception must increment parse_errors (Bug 5 regression)."""
+    import hashlib
+
+    from django.utils import timezone
+
+    from grants_ingest.adapters.base import BaseAdapter
+    from grants_ingest.adapters.event_log import EventLogWriter
+    from grants_ingest.adapters.types import FetchTask
+    from grants_ingest.models import RawRecord
+    from grants_ingest.storage.fs import FileSystemRawObjectStore
+
+    store = FileSystemRawObjectStore(root=tmp_path)
+    log = EventLogWriter(source_id="test_parse_err", actor="system:test")
+    body = b'{"name": "Parse Error Foundation"}'
+    sha = hashlib.sha256(body).hexdigest()
+
+    class FailingParseAdapter(BaseAdapter):
+        source_id = "test_parse_err"
+        version = "0.1.0"
+
+        def iter_fetch_tasks(self, **kwargs):
+            yield FetchTask(url="https://example.com/fail", expected_mime="application/json")
+
+        def fetch_one(self, task, client):
+            sidecar = {
+                "source_id": self.source_id,
+                "fetch_url": task.url,
+                "fetched_at": timezone.now().isoformat(),
+                "mime_type": "application/json",
+                "http_status": 200,
+            }
+            content_ref = self.store.put(sha, body, sidecar)
+            is_new = not RawRecord.objects.filter(content_sha=sha).exists()
+            if is_new:
+                raw = RawRecord.objects.create(
+                    content_sha=sha,
+                    fetch_url=task.url,
+                    fetched_at=timezone.now(),
+                    source_id=self.source_id,
+                    mime_type="application/json",
+                    content_ref=content_ref,
+                    http_status=200,
+                )
+            else:
+                raw = RawRecord.objects.get(content_sha=sha)
+            return raw, is_new
+
+        def parse(self, raw):
+            raise ValueError("simulated parse failure")
+
+    adapter = FailingParseAdapter(store=store, event_log=log)
+    result = adapter.run()
+
+    assert result.fetched == 1
+    assert result.parse_errors == 1
+    assert len(result.errors) == 1
+    assert "simulated parse failure" in result.errors[0]
