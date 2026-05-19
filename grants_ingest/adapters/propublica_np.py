@@ -63,8 +63,13 @@ class ProPublicaNPAdapter(BaseAdapter):
             logger.error("propublica_np: JSON decode error for %s: %s", raw.content_sha, exc)
             return [(CorpusEventType.PARSE_FAILED, {"error": str(exc), "sha": raw.content_sha})]
 
-        org = data.get("organization") or data
+        org = data.get("organization")
         if not org:
+            logger.warning(
+                "propublica_np: no organization data for %s (error=%r)",
+                raw.content_sha,
+                data.get("error"),
+            )
             return []
 
         ein = str(org.get("ein", "")).replace("-", "") or None

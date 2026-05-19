@@ -228,3 +228,42 @@ def test_parse_subsection_code_92_infers_private_foundation(store, event_log, tm
     adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
     _, payload = adapter.parse(raw)[0]
     assert payload["funder_type"] == "private_foundation"
+
+
+def _store_error_response(store, *, ein: str = "990000094") -> "RawRecord":
+    """Helper: write a synthetic ProPublica 'Organization not found' error response."""
+    import json
+
+    body = json.dumps(
+        {"data_source": "current_test", "api_version": "2.0", "error": "Organization not found"}
+    ).encode()
+    sha = hashlib.sha256(body).hexdigest()
+    sidecar = {
+        "source_id": "propublica_np",
+        "mime_type": "application/json",
+        "http_status": 200,
+        "fetch_url": f"https://example.com/organizations/{ein}.json",
+        "fetched_at": "2026-01-01T00:00:00",
+    }
+    store.put(sha, body, sidecar)
+    return RawRecord.objects.create(
+        content_sha=sha,
+        fetch_url=sidecar["fetch_url"],
+        fetched_at=timezone.now(),
+        source_id="propublica_np",
+        mime_type="application/json",
+        content_ref=store.uri_for(sha, source_id="propublica_np"),
+        http_status=200,
+    )
+
+
+@pytest.mark.django_db
+def test_parse_error_response_emits_no_events(store, event_log, tmp_path):
+    """ProPublica 'Organization not found' response must emit zero events (Bug 3 regression)."""
+    from grants_ingest.models import Funder
+
+    raw = _store_error_response(store)
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    events = adapter.parse(raw)
+    assert events == []
+    assert Funder.objects.count() == 0
