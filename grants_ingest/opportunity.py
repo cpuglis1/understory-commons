@@ -47,9 +47,15 @@ class OpportunityInstance(models.Model):
     source_records = models.ManyToManyField(
         "grants_ingest.RawRecord", related_name="opportunities", blank=True
     )
+    # Slice-2 additions: per-source identity + unstructured typed fields
+    notes = models.JSONField(default=dict)
+    source_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    external_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    funder_name_raw = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         app_label = "grants_ingest"
+        unique_together = [("source_id", "external_id")]
 
     def __str__(self) -> str:
         return self.title

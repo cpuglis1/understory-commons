@@ -26,6 +26,9 @@ class CorpusEventType(models.TextChoices):
     WITHDRAWN = "withdrawn", "Withdrawn"
     PARSE_FAILED = "parse_failed", "Parse failed"
     ROBOTS_BLOCKED = "robots_blocked", "Robots blocked"
+    OPPORTUNITY_SEEN = "opportunity_seen", "Opportunity seen"
+    OPPORTUNITY_UPDATED = "opportunity_updated", "Opportunity updated"
+    OPPORTUNITY_FILTERED = "opportunity_filtered", "Opportunity filtered"
 
 
 class CorpusEvent(models.Model):
