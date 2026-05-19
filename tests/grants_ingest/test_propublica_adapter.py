@@ -146,3 +146,57 @@ def test_parse_invalid_json_returns_parse_failed(store, event_log, tmp_path):
     adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
     events = adapter.parse(raw)
     assert events[0][0] == CorpusEventType.PARSE_FAILED
+
+
+def _store_synthetic_org(
+    store, tmp_path, org_overrides: dict, *, ein: str = "990000099"
+) -> "RawRecord":
+    """Helper: write a synthetic ProPublica org response into the store and DB."""
+    import json
+
+    base_org = {
+        "ein": ein,
+        "name": "Synthetic Test Foundation",
+        "address": "1 Test Ave",
+        "city": "Washington",
+        "state": "DC",
+        "zipcode": "20001",
+        "ntee_code": "T20",
+        "subsection_code": "3",
+    }
+    base_org.update(org_overrides)
+    body = json.dumps(
+        {"organization": base_org, "filings_with_data": [], "filings_without_data": []}
+    ).encode()
+    sha = hashlib.sha256(body).hexdigest()
+    sidecar = {
+        "source_id": "propublica_np",
+        "mime_type": "application/json",
+        "http_status": 200,
+        "fetch_url": f"https://example.com/organizations/{ein}.json",
+        "fetched_at": "2026-01-01T00:00:00",
+    }
+    store.put(sha, body, sidecar)
+    from grants_ingest.models import RawRecord as RR
+
+    return RR.objects.create(
+        content_sha=sha,
+        fetch_url=sidecar["fetch_url"],
+        fetched_at=timezone.now(),
+        source_id="propublica_np",
+        mime_type="application/json",
+        content_ref=store.uri_for(sha, source_id="propublica_np"),
+        http_status=200,
+    )
+
+
+@pytest.mark.django_db
+def test_parse_ntee_null_does_not_crash(store, event_log, tmp_path):
+    """ntee_code: null in API response must not crash parse() (Bug 1 regression)."""
+    raw = _store_synthetic_org(store, tmp_path, {"ntee_code": None}, ein="990000091")
+    adapter = ProPublicaNPAdapter(store=store, event_log=event_log)
+    events = adapter.parse(raw)
+    assert len(events) == 1
+    event_type, payload = events[0]
+    assert event_type == CorpusEventType.FUNDER_UPSERTED
+    assert "ntee" not in payload["notes"]

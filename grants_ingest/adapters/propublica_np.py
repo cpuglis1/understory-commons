@@ -69,7 +69,7 @@ class ProPublicaNPAdapter(BaseAdapter):
 
         ein = str(org.get("ein", "")).replace("-", "") or None
         name = org.get("name", "")
-        ntee = org.get("ntee_code", "")
+        ntee = org.get("ntee_code") or ""
         subsection = str(org.get("subseccd", ""))
 
         notes: dict = {}
