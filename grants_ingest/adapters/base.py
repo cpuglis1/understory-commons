@@ -32,11 +32,11 @@ class BaseAdapter:
     def iter_fetch_tasks(self, **kwargs) -> Iterable[FetchTask]:
         raise NotImplementedError
 
-    def fetch_one(self, task: FetchTask, client: httpx.Client) -> RawRecord:
+    def fetch_one(self, task: FetchTask, client: httpx.Client) -> tuple[RawRecord, bool]:
         """Fetch url, content-address the body, idempotent-write to store.
 
         Always logs a 'seen' event regardless of whether the body is new.
-        Returns the RawRecord (creating it if new, returning existing if not).
+        Returns (raw_record, is_new) where is_new is True only for first-ever store.
         """
         try:
             resp = http_get(
@@ -89,7 +89,7 @@ class BaseAdapter:
             content_sha=sha,
             payload={"url": task.url, "http_status": resp.status_code, "is_new": is_new},
         )
-        return raw
+        return raw, is_new
 
     def parse(self, raw: RawRecord) -> list:
         """Tier A: return a list of (event_type, payload) pairs to log.
@@ -102,22 +102,27 @@ class BaseAdapter:
         with httpx.Client(follow_redirects=True) as client:
             for task in self.iter_fetch_tasks(**kwargs):
                 try:
-                    raw = self.fetch_one(task, client)
-                    result.fetched += 1
-                    if (
-                        not RawRecord.objects.filter(content_sha=raw.content_sha)
-                        .exclude(pk=raw.pk)
-                        .exists()
-                    ):
-                        result.stored_new += 1
+                    raw, is_new = self.fetch_one(task, client)
+                except RobotsBlocked:
+                    result.robots_blocked += 1
+                    continue
+                except Exception as exc:
+                    logger.error("Error fetching %s: %s", task.url, exc)
+                    result.errors.append(str(exc))
+                    continue
+
+                result.fetched += 1
+                if is_new:
+                    result.stored_new += 1
+
+                try:
                     events = self.parse(raw)
                     for event_type, payload in events:
                         self.event_log.append(
                             event_type, payload=payload, content_sha=raw.content_sha
                         )
-                except RobotsBlocked:
-                    result.robots_blocked += 1
                 except Exception as exc:
-                    logger.error("Error fetching %s: %s", task.url, exc)
+                    logger.error("Error parsing %s: %s", task.url, exc)
+                    result.parse_errors += 1
                     result.errors.append(str(exc))
         return result

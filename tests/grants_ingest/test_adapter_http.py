@@ -166,12 +166,76 @@ def test_fetch_one_idempotency(tmp_path):
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
 
-    # First fetch
-    raw1 = adapter.fetch_one(task, client)
-    # Second fetch — same bytes
-    raw2 = adapter.fetch_one(task, client)
+    # First fetch — is_new=True
+    raw1, is_new1 = adapter.fetch_one(task, client)
+    # Second fetch — same bytes, is_new=False
+    raw2, is_new2 = adapter.fetch_one(task, client)
 
     assert raw1.content_sha == raw2.content_sha
+    assert is_new1 is True
+    assert is_new2 is False
     assert RawRecord.objects.filter(content_sha=raw1.content_sha).count() == 1
     seen_events = CorpusEvent.objects.filter(event_type=CorpusEventType.SEEN)
     assert seen_events.count() == 2
+
+
+@pytest.mark.django_db
+def test_run_stored_new_counts_correctly(tmp_path):
+    """stored_new must be 1 on first run and 0 on re-run of same content (Bug 4 regression)."""
+    import hashlib
+
+    from django.utils import timezone
+
+    from grants_ingest.adapters.base import BaseAdapter
+    from grants_ingest.adapters.event_log import EventLogWriter
+    from grants_ingest.adapters.types import FetchTask
+    from grants_ingest.models import RawRecord
+    from grants_ingest.storage.fs import FileSystemRawObjectStore
+
+    store = FileSystemRawObjectStore(root=tmp_path)
+    log = EventLogWriter(source_id="test_src", actor="system:test")
+    body = b'{"name": "Stored New Test Foundation"}'
+    sha = hashlib.sha256(body).hexdigest()
+
+    class StubAdapter(BaseAdapter):
+        """Bypasses HTTP — fetch_one returns a pre-built RawRecord directly."""
+
+        source_id = "test_src"
+        version = "0.1.0"
+
+        def iter_fetch_tasks(self, **kwargs):
+            yield FetchTask(url="https://example.com/stub", expected_mime="application/json")
+
+        def fetch_one(self, task, client):
+            sidecar = {
+                "source_id": self.source_id,
+                "fetch_url": task.url,
+                "fetched_at": timezone.now().isoformat(),
+                "mime_type": "application/json",
+                "http_status": 200,
+            }
+            content_ref = self.store.put(sha, body, sidecar)
+            is_new = not RawRecord.objects.filter(content_sha=sha).exists()
+            if is_new:
+                raw = RawRecord.objects.create(
+                    content_sha=sha,
+                    fetch_url=task.url,
+                    fetched_at=timezone.now(),
+                    source_id=self.source_id,
+                    mime_type="application/json",
+                    content_ref=content_ref,
+                    http_status=200,
+                )
+            else:
+                raw = RawRecord.objects.get(content_sha=sha)
+            return raw, is_new
+
+    adapter = StubAdapter(store=store, event_log=log)
+
+    result1 = adapter.run()
+    result2 = adapter.run()
+
+    assert result1.fetched == 1
+    assert result1.stored_new == 1
+    assert result2.fetched == 1
+    assert result2.stored_new == 0
