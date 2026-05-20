@@ -266,6 +266,84 @@ def test_pnd_updated_item_emits_opportunity_updated(tmp_path):
 
 
 @pytest.mark.django_db
+def test_pnd_source_page_linked_as_second_raw_record(tmp_path):
+    """Source page is fetched as a separate RawRecord and M2M-linked to the OpportunityInstance."""
+    store = _make_store(tmp_path)
+    event_log = _make_event_log()
+    adapter = PNDRfpAdapter(store=store, event_log=event_log)
+    source_html = SOURCE_PAGE_FIXTURE.read_bytes()
+
+    rss_body = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>PND RFPs</title>
+    <item>
+      <title>DC Youth Fund</title>
+      <link>https://example-source-page.org/rfp/dc-fund</link>
+      <guid isPermaLink="false">pnd-guid-srctest</guid>
+      <pubDate>Mon, 19 May 2026 12:00:00 +0000</pubDate>
+      <description>Deadline: July 31, 2026. Geographic focus: District of Columbia. Funder: DC Fund.</description>
+    </item>
+  </channel>
+</rss>"""
+
+    with (
+        patch("grants_ingest.adapters.http._get_robots") as mock_robots,
+        patch("grants_ingest.adapters.base.http_get") as mock_http,
+    ):
+        mock_robots.return_value.can_fetch.return_value = True
+        mock_http.side_effect = [
+            _make_rss_response(rss_body),
+            _make_html_response("https://example-source-page.org/rfp/dc-fund", source_html),
+        ]
+        adapter.run()
+
+    from grants_ingest.materialize import apply_events
+
+    apply_events()
+
+    opp = OpportunityInstance.objects.filter(external_id="pnd_rfp:pnd-guid-srctest").first()
+    assert opp is not None
+    # Opportunity should have at least 2 source records: RSS RawRecord + source-page RawRecord
+    assert opp.source_records.count() >= 2
+
+
+@pytest.mark.django_db
+def test_pnd_filter_blocks_source_page_fetch(tmp_path):
+    """Items that fail the geo filter do NOT trigger source-page fetches."""
+    store = _make_store(tmp_path)
+    event_log = _make_event_log()
+    adapter = PNDRfpAdapter(store=store, event_log=event_log)
+
+    rss_body = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>PND RFPs</title>
+    <item>
+      <title>Texas Only Grant</title>
+      <link>https://texas-funder.org/rfp/texas-only</link>
+      <guid isPermaLink="false">pnd-guid-texas</guid>
+      <pubDate>Mon, 19 May 2026 12:00:00 +0000</pubDate>
+      <description>Deadline: August 1, 2026. Geographic focus: Texas. Funder: Lone Star.</description>
+    </item>
+  </channel>
+</rss>"""
+
+    calls = []
+    with (
+        patch("grants_ingest.adapters.http._get_robots") as mock_robots,
+        patch("grants_ingest.adapters.base.http_get") as mock_http,
+    ):
+        mock_robots.return_value.can_fetch.return_value = True
+        mock_http.side_effect = [_make_rss_response(rss_body)]
+        adapter.run()
+        calls = mock_http.call_args_list
+
+    # Only one HTTP call: the RSS fetch. No source-page fetch.
+    assert len(calls) == 1
+
+
+@pytest.mark.django_db
 def test_pnd_run_second_time_idempotent(tmp_path):
     """Running twice with identical RSS produces no duplicate OpportunityInstance rows."""
     store = _make_store(tmp_path)
