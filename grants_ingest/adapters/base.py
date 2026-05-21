@@ -17,6 +17,14 @@ from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+}
+
 
 class BaseAdapter:
     source_id: ClassVar[str]
@@ -99,7 +107,7 @@ class BaseAdapter:
 
     def run(self, **kwargs) -> AdapterRunResult:
         result = AdapterRunResult(source_id=self.source_id)
-        with httpx.Client(follow_redirects=True) as client:
+        with httpx.Client(follow_redirects=True, headers=_DEFAULT_HEADERS) as client:
             for task in self.iter_fetch_tasks(**kwargs):
                 try:
                     raw, is_new = self.fetch_one(task, client)

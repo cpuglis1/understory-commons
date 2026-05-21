@@ -25,7 +25,7 @@ import httpx
 
 from grants_ingest.corpus_event import CorpusEventType
 
-from .base import BaseAdapter
+from .base import _DEFAULT_HEADERS, BaseAdapter
 from .http import RobotsBlocked
 from .types import AdapterRunResult, FetchTask
 
@@ -75,7 +75,7 @@ class GrantsGovAdapter(BaseAdapter):
         result = super().run(**kwargs)
         # Second pass: fetch PDFs queued by parse()
         if self._pdf_queue:
-            with httpx.Client(follow_redirects=True) as client:
+            with httpx.Client(follow_redirects=True, headers=_DEFAULT_HEADERS) as client:
                 for opp_payload in self._pdf_queue:
                     self._fetch_pdf(opp_payload, client, result)
         return result

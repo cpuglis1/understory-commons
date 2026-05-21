@@ -14,6 +14,7 @@ to a base-class iter_fetch_tasks_followup() hook at that point.
 
 from __future__ import annotations
 
+import html
 import logging
 import re
 import xml.etree.ElementTree as ET
@@ -25,7 +26,7 @@ import httpx
 
 from grants_ingest.corpus_event import CorpusEventType
 
-from .base import BaseAdapter
+from .base import _DEFAULT_HEADERS, BaseAdapter
 from .http import RobotsBlocked
 from .types import AdapterRunResult, FetchTask
 
@@ -67,7 +68,7 @@ class PNDRfpAdapter(BaseAdapter):
 
     def run(self, **kwargs) -> AdapterRunResult:
         result = AdapterRunResult(source_id=self.source_id)
-        with httpx.Client(follow_redirects=True) as client:
+        with httpx.Client(follow_redirects=True, headers=_DEFAULT_HEADERS) as client:
             # Pass 1: fetch RSS and parse items
             rss_task = FetchTask(url=self.rss_url, expected_mime="application/rss+xml")
             try:
@@ -135,7 +136,7 @@ class PNDRfpAdapter(BaseAdapter):
         """Parse RSS body, emit events for each item. Return list of passing items."""
         from grants_ingest.corpus_event import CorpusEvent
 
-        body = self.store.get(rss_raw.content_sha)
+        body = _sanitize_rss_xml(self.store.get(rss_raw.content_sha))
         try:
             root = ET.fromstring(body)
         except ET.ParseError as exc:
@@ -240,6 +241,28 @@ class PNDRfpAdapter(BaseAdapter):
                 passing_items.append(item_payload)
 
         return passing_items
+
+
+_XML_BUILTIN_ENTITIES = frozenset({"amp", "lt", "gt", "quot", "apos"})
+_NAMED_ENTITY_RE = re.compile(r"&([a-zA-Z][a-zA-Z0-9]*);")
+
+
+def _sanitize_rss_xml(body: bytes) -> bytes:
+    """Replace undefined HTML named entities with their unicode equivalents.
+
+    ElementTree only understands the 5 XML built-in entities. PND RSS uses
+    HTML named entities (e.g. &ldquo; &rsquo;). This pass converts them to
+    plain unicode before handing the bytes to ElementTree.
+    """
+
+    def _replace(m: re.Match) -> str:
+        name = m.group(1)
+        if name in _XML_BUILTIN_ENTITIES:
+            return m.group(0)
+        return html.unescape(m.group(0))
+
+    text = body.decode("utf-8", errors="replace")
+    return _NAMED_ENTITY_RE.sub(_replace, text).encode("utf-8")
 
 
 def _passes_geo_filter(text: str) -> bool:
