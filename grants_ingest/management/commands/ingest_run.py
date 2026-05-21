@@ -11,7 +11,6 @@ from django.core.management.base import BaseCommand, CommandError
 from grants_ingest.adapters.event_log import EventLogWriter
 from grants_ingest.adapters.grants_gov import GrantsGovAdapter
 from grants_ingest.adapters.irs_990pf import IRS990PFAdapter
-from grants_ingest.adapters.pnd_rfp import PNDRfpAdapter
 from grants_ingest.adapters.propublica_np import ProPublicaNPAdapter
 from grants_ingest.materialize import apply_events
 from grants_ingest.models import Funder
@@ -29,7 +28,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--source",
             required=True,
-            choices=["propublica_np", "irs_990pf", "pnd_rfp", "grants_gov"],
+            choices=["propublica_np", "irs_990pf", "grants_gov"],
         )
         parser.add_argument("--seed-list", default=str(SEEDS_DIR / "dmv_foundations.yml"))
         parser.add_argument(
@@ -85,8 +84,6 @@ def _build_adapter(source: str, store, event_log, options):
             all_filings=options["all_filings"],
         )
         return IRS990PFAdapter(store=store, event_log=event_log, filing_urls=filing_urls)
-    if source == "pnd_rfp":
-        return PNDRfpAdapter(store=store, event_log=event_log)
     if source == "grants_gov":
         return GrantsGovAdapter(store=store, event_log=event_log)
     raise CommandError(f"Unknown source: {source}")

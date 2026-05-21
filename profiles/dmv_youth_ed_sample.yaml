@@ -17,16 +17,14 @@ filters:
   # Source filter (omit to include all sources)
   # sources:
   #   - grants_gov
-  #   - pnd_rfp
 
   # Subject-area codes (OR logic — any match passes)
   # Grants.gov categories: E=Education, ED=Education, HL=Health
-  # PND uses free-text geo tags, not codes
   subject_areas:
     - E
     - ED
     - HL
-    - education   # free-text match for pnd_rfp items
+    - education
 
   # Funder name fragment (case-insensitive substring, optional)
   # funder_name_contains: "education"

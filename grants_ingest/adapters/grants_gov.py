@@ -31,10 +31,8 @@ from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
 
-# Current daily extract URL pattern — verify during first live run.
-# This is the canonical bulk path per the slice-2 plan §2.1.
 _EXTRACT_URL_TPL = (
-    "https://prod-grants-gov-chamel.s3.amazonaws.com/extracts/" "GrantsDBExtract{date}v2.zip"
+    "https://prod-grants-gov-chatbot.s3.amazonaws.com/extracts/" "GrantsDBExtract{date}v2.zip"
 )
 
 # Rule 1: eligible-applicant codes that pass (nonprofit 501c3 or other nonprofit)
@@ -51,7 +49,7 @@ _MAX_AWARD_FLOOR = 250_000
 
 
 def _today_str() -> str:
-    return datetime.now(UTC).strftime("%m%d%Y")
+    return datetime.now(UTC).strftime("%Y%m%d")
 
 
 class GrantsGovAdapter(BaseAdapter):
