@@ -692,3 +692,48 @@ plan). Recording so the next implementation session doesn't relitigate:
 Anything in the above list that becomes urgent during implementation
 should stop the work and trigger a plan update, not a quiet scope
 expansion.
+
+---
+
+## 11. URL Pattern Revision (2026-05-21)
+
+**Trigger:** AWS decommissioned the IRS 990 Registry-of-Open-Data S3 bucket.
+Every per-filing URL of the form
+`https://s3.amazonaws.com/irs-form-990/{object_id}_public.xml` now returns
+404. Verified live 2026-05-21.
+
+**New canonical source:** IRS monthly batch zips at:
+```
+https://apps.irs.gov/pub/epostcard/990/xml/{YYYY}/{YYYY}_TEOS_XML_{MM}{LETTER}.zip
+```
+`LETTER` = A, B, C per month. Each zip is 150–260 MB and contains every
+990 form type (990, 990-EZ, 990-PF, 990-T) filed in that period. Verified
+live responses:
+- `.../2026/2026_TEOS_XML_04A.zip` → 200, 261,936,622 bytes
+- `.../2025/2025_TEOS_XML_12A.zip` → 200, 151,835,020 bytes
+- `.../2026/2026_TEOS_XML_05A.zip` → 302 (current month not yet posted)
+
+**Implementation change (v0.2.0 of IRS990PFAdapter):**
+- `__init__` now takes `seed_eins: list[str]` and `months_back: int = 3`
+  instead of `filing_urls: list[dict]`.
+- `iter_fetch_tasks()` yields monthly zip URLs (current month + last
+  `months_back - 1` months, all letters A/B/C).
+- `run()` is overridden: fetches each zip into `BytesIO`, opens with
+  `zipfile.ZipFile`, iterates entries, filters by `ReturnTypeCd == "990PF"`
+  AND `Filer/EIN ∈ seed_eins`, stores only matching entries as
+  content-addressed `RawRecord` rows, then calls the unchanged `parse()`.
+- Non-matching entries (wrong form type or EIN not in seed list) are
+  dropped — no `RawRecord`, no event.
+- 302 and 404 responses are silently skipped (current month / not-yet-posted
+  months); other non-200 responses are logged as errors.
+
+**`ingest_run` command change:**
+- Removed flags: `--from-funders`, `--from-seed-list`, `--all-filings`
+- Added flag: `--months-back` (int, default 3)
+- `_build_filing_urls()` function deleted entirely.
+
+**Test coverage:** 17 new tests in
+`tests/grants_ingest/test_irs_990pf_adapter.py` covering: `_should_process`
+filter logic, `_process_zip` store/no-store decisions, idempotency,
+event emission, URL generation including year-boundary wrapping, and
+`parse()` regression parity with the v0.1.0 synthetic XML fixture.

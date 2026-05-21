@@ -1,33 +1,49 @@
-"""IRS990PFAdapter — parses 990-PF XML filings from URLs in the funder registry.
+"""IRS990PFAdapter — parses 990-PF XML filings from IRS monthly batch zips.
 
 source_id: irs_990pf
-version:   0.1.0
-Rate limit: 1 req/sec (same ProPublica XML URLs)
+version:   0.2.0
+Rate limit: 1 req/sec (applies to zip downloads, not per-entry parsing)
 Auth: none
 
-parse() emits:
+Batch-zip URL pattern (verified live 2026-05-21):
+  https://apps.irs.gov/pub/epostcard/990/xml/{YYYY}/{YYYY}_TEOS_XML_{MM}{LETTER}.zip
+  LETTER = A, B, C per month. Current month may return 302 (not yet posted); skip.
+
+parse() emits (per matching 990-PF XML entry):
   historical_grant_recorded  — one event per Part XV-1 grant row
   funder_enriched            — one event per filing with Part XV-2 application text
 """
 
 from __future__ import annotations
 
+import io
 import logging
+import time
 import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Iterable
+from datetime import date
 from typing import ClassVar
+from urllib.parse import urlparse
+
+import httpx
+from django.utils import timezone
 
 from grants_ingest.corpus_event import CorpusEventType
 from grants_ingest.raw_record import RawRecord
 from grants_ingest.storage.base import RawObjectStore
 
-from .base import BaseAdapter
+from .base import _DEFAULT_HEADERS, BaseAdapter
 from .event_log import EventLogWriter
-from .types import FetchTask
+from .http import compute_sha
+from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
 
-# IRS 990-PF XML uses these namespace prefixes in modern e-file submissions.
+_IRS_ZIP_URL = (
+    "https://apps.irs.gov/pub/epostcard/990/xml" "/{year}/{year}_TEOS_XML_{mm}{letter}.zip"
+)
+
 _NS = {
     "irs": "http://www.irs.gov/efile",
 }
@@ -40,7 +56,7 @@ def _find_text(el: ET.Element, path: str, ns: dict | None = None) -> str:
 
 class IRS990PFAdapter(BaseAdapter):
     source_id: ClassVar[str] = "irs_990pf"
-    version: ClassVar[str] = "0.1.0"
+    version: ClassVar[str] = "0.2.0"
     rate_limit_per_sec: ClassVar[float] = 1.0
     robots_compliance: ClassVar[str] = "strict"
 
@@ -48,22 +64,127 @@ class IRS990PFAdapter(BaseAdapter):
         self,
         store: RawObjectStore,
         event_log: EventLogWriter,
-        filing_urls: list[dict] | None = None,
+        seed_eins: list[str] | None = None,
+        months_back: int = 3,
     ) -> None:
-        """
-        filing_urls: list of {"ein": "...", "url": "...", "year": int}
-        Built from Funder.notes['filings_index'] by the management command.
-        """
         super().__init__(store=store, event_log=event_log)
-        self._filing_urls: list[dict] = filing_urls or []
+        self._seed_eins: set[str] = {e.replace("-", "") for e in (seed_eins or [])}
+        self.months_back = months_back
 
     def iter_fetch_tasks(self, **kwargs) -> Iterable[FetchTask]:
-        for entry in self._filing_urls:
-            yield FetchTask(
-                url=entry["url"],
-                expected_mime="application/xml",
-                extra_metadata={"ein": entry.get("ein", ""), "tax_year": entry.get("year")},
+        today = date.today()
+        for i in range(self.months_back):
+            month = today.month - i
+            year = today.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            mm = f"{month:02d}"
+            for letter in "ABC":
+                url = _IRS_ZIP_URL.format(year=year, mm=mm, letter=letter)
+                yield FetchTask(url=url, expected_mime="application/zip")
+
+    def run(self, **kwargs) -> AdapterRunResult:
+        result = AdapterRunResult(source_id=self.source_id)
+        last_req: dict[str, float] = {}
+        min_gap = 1.0 / self.rate_limit_per_sec
+
+        with httpx.Client(follow_redirects=False, headers=_DEFAULT_HEADERS, timeout=360) as client:
+            for task in self.iter_fetch_tasks(**kwargs):
+                host = urlparse(task.url).netloc
+                elapsed = time.monotonic() - last_req.get(host, 0.0)
+                if elapsed < min_gap:
+                    time.sleep(min_gap - elapsed)
+                last_req[host] = time.monotonic()
+
+                try:
+                    resp = client.get(task.url)
+                except Exception as exc:
+                    logger.error("irs_990pf: fetch error %s: %s", task.url, exc)
+                    result.errors.append(str(exc))
+                    continue
+
+                if resp.status_code in (302, 404):
+                    logger.debug("irs_990pf: skip %s (HTTP %d)", task.url, resp.status_code)
+                    continue
+
+                if resp.status_code != 200:
+                    logger.warning("irs_990pf: HTTP %d for %s", resp.status_code, task.url)
+                    result.errors.append(f"HTTP {resp.status_code}: {task.url}")
+                    continue
+
+                result.fetched += 1
+                logger.info("irs_990pf: processing %s (%d bytes)", task.url, len(resp.content))
+                try:
+                    self._process_zip(resp.content, task.url, result)
+                except zipfile.BadZipFile as exc:
+                    logger.error("irs_990pf: bad zip %s: %s", task.url, exc)
+                    result.errors.append(str(exc))
+
+        return result
+
+    def _process_zip(self, zip_bytes: bytes, zip_url: str, result: AdapterRunResult) -> None:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            for entry_name in zf.namelist():
+                if not entry_name.lower().endswith(".xml"):
+                    continue
+                xml_bytes = zf.read(entry_name)
+                self._process_entry(xml_bytes, entry_name, zip_url, result)
+
+    def _process_entry(
+        self,
+        xml_bytes: bytes,
+        entry_name: str,
+        zip_url: str,
+        result: AdapterRunResult,
+    ) -> None:
+        is_match, ein = _should_process(xml_bytes, self._seed_eins)
+        if not is_match:
+            return
+
+        sha = compute_sha(xml_bytes)
+        fetched_at = timezone.now()
+        sidecar = {
+            "source_id": self.source_id,
+            "fetch_url": zip_url,
+            "zip_entry": entry_name,
+            "fetched_at": fetched_at.isoformat(),
+            "mime_type": "application/xml",
+            "http_status": 200,
+            "ein": ein,
+        }
+        content_ref = self.store.put(sha, xml_bytes, sidecar)
+        is_new = not RawRecord.objects.filter(content_sha=sha).exists()
+
+        if is_new:
+            raw = RawRecord.objects.create(
+                content_sha=sha,
+                fetch_url=zip_url,
+                fetched_at=fetched_at,
+                source_id=self.source_id,
+                mime_type="application/xml",
+                content_ref=content_ref,
+                http_status=200,
+                fetch_metadata={"zip_entry": entry_name, "ein": ein},
             )
+            result.stored_new += 1
+        else:
+            raw = RawRecord.objects.get(content_sha=sha)
+
+        self.event_log.append(
+            CorpusEventType.SEEN,
+            content_sha=sha,
+            payload={"url": zip_url, "zip_entry": entry_name, "is_new": is_new},
+        )
+
+        try:
+            events = self.parse(raw)
+            for event_type, payload in events:
+                self.event_log.append(event_type, payload=payload, content_sha=sha)
+        except Exception as exc:
+            logger.error("irs_990pf: parse error %s/%s: %s", zip_url, entry_name, exc)
+            result.parse_errors += 1
+            result.errors.append(str(exc))
 
     def parse(self, raw: RawRecord) -> list[tuple[CorpusEventType, dict]]:
         body = self.store.get(raw.content_sha)
@@ -73,31 +194,14 @@ class IRS990PFAdapter(BaseAdapter):
             logger.error("irs_990pf: XML parse error for %s: %s", raw.content_sha, exc)
             return [(CorpusEventType.PARSE_FAILED, {"error": str(exc), "sha": raw.content_sha})]
 
-        if root.tag == "Error":
-            error_code = _find_text(root, "Code", ns={}) or "unknown"
-            logger.warning(
-                "irs_990pf: S3 returned error '%s' for %s — object_id may be wrong",
-                error_code,
-                raw.fetch_url,
-            )
-            return [
-                (
-                    CorpusEventType.PARSE_FAILED,
-                    {"error": f"S3:{error_code}", "sha": raw.content_sha},
-                )
-            ]
-
         events: list[tuple[CorpusEventType, dict]] = []
 
         filer_ein = _find_filer_ein(root)
         tax_year = _find_tax_year(root)
 
-        # Part XV-1: grant rows
-        grant_rows = _extract_part_xv1(root, filer_ein, tax_year)
-        for row in grant_rows:
+        for row in _extract_part_xv1(root, filer_ein, tax_year):
             events.append((CorpusEventType.HISTORICAL_GRANT_RECORDED, row))
 
-        # Part XV-2: application info text -> funder_enriched
         enrichment = _extract_part_xv2(root, filer_ein)
         if enrichment:
             events.append((CorpusEventType.FUNDER_ENRICHED, enrichment))
@@ -106,12 +210,38 @@ class IRS990PFAdapter(BaseAdapter):
 
 
 # ---------------------------------------------------------------------------
-# XML extraction helpers
+# Filter helper
+# ---------------------------------------------------------------------------
+
+
+def _should_process(xml_bytes: bytes, seed_eins: set[str]) -> tuple[bool, str]:
+    """Return (should_keep, ein). Checks ReturnTypeCd and Filer/EIN."""
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return False, ""
+
+    return_type = ""
+    for path in [".//irs:ReturnTypeCd", ".//ReturnTypeCd"]:
+        ns = _NS if "irs:" in path else {}
+        val = _find_text(root, path, ns)
+        if val:
+            return_type = val
+            break
+
+    if return_type.upper() != "990PF":
+        return False, ""
+
+    ein = _find_filer_ein(root)
+    return ein in seed_eins, ein
+
+
+# ---------------------------------------------------------------------------
+# XML extraction helpers (unchanged from v0.1.0)
 # ---------------------------------------------------------------------------
 
 
 def _find_filer_ein(root: ET.Element) -> str:
-    # Try namespaced path first, then unqualified
     for path in [
         ".//irs:Filer/irs:EIN",
         ".//Filer/EIN",
@@ -143,7 +273,6 @@ def _find_tax_year(root: ET.Element) -> int:
 
 def _extract_part_xv1(root: ET.Element, filer_ein: str, tax_year: int) -> list[dict]:
     rows = []
-    # Search both namespaced and plain for grant group elements
     grant_paths = [
         ".//irs:GrantOrContributionPdDurYrGrp",
         ".//GrantOrContributionPdDurYrGrp",
@@ -165,23 +294,24 @@ def _extract_part_xv1(root: ET.Element, filer_ein: str, tax_year: int) -> list[d
             except ValueError:
                 continue
 
-            row = {
-                "funder_ein": filer_ein,
-                "tax_year": tax_year,
-                "recipient_name_raw": recipient_name,
-                "recipient_address_raw": _find_recipient_address(grp),
-                "recipient_ein": _find_recipient_ein(grp),
-                "amount": str(amount),
-                "purpose": (
-                    _find_text(grp, "irs:GrantOrContributionPurposeTxt", _NS)
-                    or _find_text(grp, "GrantOrContributionPurposeTxt")
-                ),
-                "relationship_flag": (
-                    _find_text(grp, "irs:RecipientRelationshipTxt", _NS)
-                    or _find_text(grp, "RecipientRelationshipTxt")
-                ),
-            }
-            rows.append(row)
+            rows.append(
+                {
+                    "funder_ein": filer_ein,
+                    "tax_year": tax_year,
+                    "recipient_name_raw": recipient_name,
+                    "recipient_address_raw": _find_recipient_address(grp),
+                    "recipient_ein": _find_recipient_ein(grp),
+                    "amount": str(amount),
+                    "purpose": (
+                        _find_text(grp, "irs:GrantOrContributionPurposeTxt", _NS)
+                        or _find_text(grp, "GrantOrContributionPurposeTxt")
+                    ),
+                    "relationship_flag": (
+                        _find_text(grp, "irs:RecipientRelationshipTxt", _NS)
+                        or _find_text(grp, "RecipientRelationshipTxt")
+                    ),
+                }
+            )
         if rows:
             break
     return rows
