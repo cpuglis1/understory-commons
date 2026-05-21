@@ -157,12 +157,13 @@ def test_grants_gov_passing_opportunities_emit_seen(tmp_path):
         mock_http.return_value = _make_zip_response(zip_body)
         adapter.run()
 
-    # Fixture has 6 passing opportunities: #1, #5, #6, #7, #8
-    # (Note: #2 fails rule2, #3 fails rule1, #4 fails rule3)
+    # 5 passing opportunities: #1, #5, #6, #7, #8
+    # (#2 fails rule2, #3 fails rule1, #4 fails rule3)
+    # #5 has a PDF URL → second OPPORTUNITY_SEEN emitted by _fetch_pdf → total 6
     seen = CorpusEvent.objects.filter(
         source_id="grants_gov", event_type=CorpusEventType.OPPORTUNITY_SEEN
     )
-    assert seen.count() == 5
+    assert seen.count() == 6
 
 
 @pytest.mark.django_db
@@ -337,6 +338,84 @@ def test_grants_gov_materializes_opportunity_rows(tmp_path):
 
     apply_events()
     assert OpportunityInstance.objects.filter(source_id="grants_gov").count() == 5
+
+
+@pytest.mark.django_db
+def test_grants_gov_pdf_fetched_as_second_raw_record(tmp_path):
+    """Opportunity #5 with PDF URL: PDF is fetched as a separate RawRecord and M2M-linked."""
+    store = _make_store(tmp_path)
+    event_log = _make_event_log()
+    adapter = GrantsGovAdapter(store=store, event_log=event_log)
+
+    zip_body = EXTRACT_FIXTURE.read_bytes()
+    pdf_body = (FIXTURES / "grants_gov_fake_rfp.pdf").read_bytes()
+
+    def _fake_head(url, **kwargs):
+        resp = httpx.Response(
+            200,
+            headers={"content-length": str(len(pdf_body))},
+            request=httpx.Request("HEAD", url),
+        )
+        return resp
+
+    def _fake_get(*args, **kwargs):
+        # Return a different response based on URL
+        url = args[0] if args else kwargs.get("url", "")
+        if url == adapter.extract_url:
+            return httpx.Response(
+                200,
+                content=zip_body,
+                headers={"content-type": "application/zip"},
+                request=httpx.Request("GET", url),
+            )
+        # PDF request
+        return httpx.Response(
+            200,
+            content=pdf_body,
+            headers={"content-type": "application/pdf"},
+            request=httpx.Request("GET", url),
+        )
+
+    with (
+        patch("grants_ingest.adapters.http._get_robots") as mock_robots,
+        patch("grants_ingest.adapters.base.http_get", side_effect=_fake_get),
+    ):
+        mock_robots.return_value.can_fetch.return_value = True
+        adapter.run()
+
+    apply_events()
+
+    opp = OpportunityInstance.objects.filter(external_id="grants_gov:10005").first()
+    assert opp is not None
+    # Should have at least 2 source records: the zip extract + the PDF
+    assert opp.source_records.count() >= 2
+
+
+@pytest.mark.django_db
+def test_grants_gov_non_pdf_description_not_fetched(tmp_path):
+    """Opportunity #6 with HTML description URL does not trigger PDF fetch."""
+    store = _make_store(tmp_path)
+    event_log = _make_event_log()
+    adapter = GrantsGovAdapter(store=store, event_log=event_log)
+
+    zip_body = EXTRACT_FIXTURE.read_bytes()
+
+    with (
+        patch("grants_ingest.adapters.http._get_robots") as mock_robots,
+        patch("grants_ingest.adapters.base.http_get") as mock_http,
+    ):
+        mock_robots.return_value.can_fetch.return_value = True
+        mock_http.return_value = _make_zip_response(zip_body)
+        adapter.run()
+
+    # Only the zip extract is in the PDF queue, not HTML description
+    opp_6_event = CorpusEvent.objects.filter(
+        source_id="grants_gov",
+        event_type=CorpusEventType.OPPORTUNITY_SEEN,
+        payload__external_id="grants_gov:10006",
+    ).first()
+    assert opp_6_event is not None
+    assert "description_pdf_url" not in opp_6_event.payload.get("notes", {})
 
 
 @pytest.mark.django_db

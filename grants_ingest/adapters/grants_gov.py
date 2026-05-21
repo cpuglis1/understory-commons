@@ -5,7 +5,10 @@ opportunity. Unzip in-memory, iterparse the XML (bounded memory regardless
 of extract size), apply three pre-filter rules, emit OPPORTUNITY_SEEN for
 passes and OPPORTUNITY_FILTERED for failures.
 
-PDF fetch (Description URL that ends in .pdf) is added in commit #6.
+PDF fetch: after the base run() loop, a second pass fetches any PDF URLs
+found in passing opportunities' Description field, stores them as separate
+RawRecords (50MB cap), and emits an OPPORTUNITY_SEEN event with the PDF
+SHA in extra_content_shas so the materializer can M2M-link it.
 """
 
 from __future__ import annotations
@@ -18,10 +21,13 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import ClassVar
 
+import httpx
+
 from grants_ingest.corpus_event import CorpusEventType
 
 from .base import BaseAdapter
-from .types import FetchTask
+from .http import RobotsBlocked
+from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +63,78 @@ class GrantsGovAdapter(BaseAdapter):
     def __init__(self, store, event_log, extract_url: str | None = None) -> None:
         super().__init__(store, event_log)
         self.extract_url = extract_url or _EXTRACT_URL_TPL.format(date=_today_str())
+        self._pdf_queue: list[dict] = []
+
+    # 50 MB hard cap on PDF downloads per plan §2.5
+    _PDF_SIZE_CAP = 50 * 1024 * 1024
 
     def iter_fetch_tasks(self, **kwargs):
         yield FetchTask(url=self.extract_url, expected_mime="application/zip")
+
+    def run(self, **kwargs) -> AdapterRunResult:
+        result = super().run(**kwargs)
+        # Second pass: fetch PDFs queued by parse()
+        if self._pdf_queue:
+            with httpx.Client(follow_redirects=True) as client:
+                for opp_payload in self._pdf_queue:
+                    self._fetch_pdf(opp_payload, client, result)
+        return result
+
+    def _fetch_pdf(self, opp_payload: dict, client: httpx.Client, result: AdapterRunResult) -> None:
+        pdf_url = opp_payload["notes"].get("description_pdf_url", "")
+        if not pdf_url:
+            return
+
+        # HEAD first to check Content-Length before downloading
+        try:
+            head = client.head(pdf_url, timeout=15)
+            content_length = int(head.headers.get("content-length", 0))
+            if content_length > self._PDF_SIZE_CAP:
+                logger.warning(
+                    "grants_gov: PDF %s too large (%d bytes), skipping", pdf_url, content_length
+                )
+                self.event_log.append(
+                    CorpusEventType.OPPORTUNITY_FILTERED,
+                    payload={
+                        "source_id": self.source_id,
+                        "external_id": opp_payload["external_id"],
+                        "reason": "pdf_too_large",
+                        "pdf_url": pdf_url,
+                    },
+                )
+                return
+        except Exception:
+            pass  # HEAD failed — try GET anyway; content cap enforced below
+
+        pdf_task = FetchTask(
+            url=pdf_url,
+            expected_mime="application/pdf",
+            extra_metadata={"fed_opp_id": opp_payload["notes"].get("fed_opp_id", "")},
+        )
+        try:
+            pdf_raw, pdf_is_new = self.fetch_one(pdf_task, client)
+        except RobotsBlocked:
+            result.robots_blocked += 1
+            return
+        except Exception as exc:
+            logger.warning("grants_gov: PDF fetch failed for %s: %s", pdf_url, exc)
+            result.errors.append(str(exc))
+            return
+
+        result.fetched += 1
+        if pdf_is_new:
+            result.stored_new += 1
+
+        # Emit a second OPPORTUNITY_SEEN with the PDF SHA in extra_content_shas
+        # so the materializer M2M-links the PDF RawRecord.
+        self.event_log.append(
+            CorpusEventType.OPPORTUNITY_SEEN,
+            content_sha=opp_payload["content_sha"],
+            payload={
+                **opp_payload,
+                "extra_content_shas": [pdf_raw.content_sha],
+            },
+        )
 
     def parse(self, raw) -> list:
         """Unzip the extract, iterparse XML, emit OPPORTUNITY_SEEN / FILTERED."""
@@ -168,9 +243,10 @@ class GrantsGovAdapter(BaseAdapter):
         if total_pool is not None:
             payload["total_pool"] = str(total_pool)
 
-        # PDF description URL — stored in notes, fetched separately in commit #6
+        # PDF description URL — stored in notes; queued for second-pass fetch in run()
         if description and _looks_like_pdf_url(description):
             payload["notes"]["description_pdf_url"] = description
+            self._pdf_queue.append(payload)
 
         return [(CorpusEventType.OPPORTUNITY_SEEN, payload)]
 
