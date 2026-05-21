@@ -9,7 +9,9 @@ import yaml
 from django.core.management.base import BaseCommand, CommandError
 
 from grants_ingest.adapters.event_log import EventLogWriter
+from grants_ingest.adapters.grants_gov import GrantsGovAdapter
 from grants_ingest.adapters.irs_990pf import IRS990PFAdapter
+from grants_ingest.adapters.pnd_rfp import PNDRfpAdapter
 from grants_ingest.adapters.propublica_np import ProPublicaNPAdapter
 from grants_ingest.materialize import apply_events
 from grants_ingest.models import Funder
@@ -24,7 +26,11 @@ class Command(BaseCommand):
     help = "Run one adapter end-to-end: fetch, store, log events, materialize."
 
     def add_arguments(self, parser):
-        parser.add_argument("--source", required=True, choices=["propublica_np", "irs_990pf"])
+        parser.add_argument(
+            "--source",
+            required=True,
+            choices=["propublica_np", "irs_990pf", "pnd_rfp", "grants_gov"],
+        )
         parser.add_argument("--seed-list", default=str(SEEDS_DIR / "dmv_foundations.yml"))
         parser.add_argument(
             "--from-seed-list",
@@ -50,19 +56,7 @@ class Command(BaseCommand):
             actor=f"system:{source}_v0.1.0",
         )
 
-        if source == "propublica_np":
-            eins = _load_eins(options["seed_list"])
-            adapter = ProPublicaNPAdapter(store=store, event_log=event_log, seed_eins=eins)
-        elif source == "irs_990pf":
-            filing_urls = _build_filing_urls(
-                options["seed_list"],
-                from_seed_list=options["from_seed_list"],
-                from_funders=options["from_funders"],
-                all_filings=options["all_filings"],
-            )
-            adapter = IRS990PFAdapter(store=store, event_log=event_log, filing_urls=filing_urls)
-        else:
-            raise CommandError(f"Unknown source: {source}")
+        adapter = _build_adapter(source, store, event_log, options)
 
         self.stdout.write(f"Running {source}...")
         result = adapter.run()
@@ -77,6 +71,25 @@ class Command(BaseCommand):
         self.stdout.write("Materializing events...")
         apply_events()
         self.stdout.write("Done.")
+
+
+def _build_adapter(source: str, store, event_log, options):
+    if source == "propublica_np":
+        eins = _load_eins(options["seed_list"])
+        return ProPublicaNPAdapter(store=store, event_log=event_log, seed_eins=eins)
+    if source == "irs_990pf":
+        filing_urls = _build_filing_urls(
+            options["seed_list"],
+            from_seed_list=options["from_seed_list"],
+            from_funders=options["from_funders"],
+            all_filings=options["all_filings"],
+        )
+        return IRS990PFAdapter(store=store, event_log=event_log, filing_urls=filing_urls)
+    if source == "pnd_rfp":
+        return PNDRfpAdapter(store=store, event_log=event_log)
+    if source == "grants_gov":
+        return GrantsGovAdapter(store=store, event_log=event_log)
+    raise CommandError(f"Unknown source: {source}")
 
 
 def _load_eins(seed_list_path: str) -> list[str]:
