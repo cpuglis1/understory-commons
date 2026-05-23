@@ -156,17 +156,19 @@ def _apply_opportunity_seen(event: CorpusEvent) -> None:
 
     first_seen = event.timestamp
     defaults: dict = {
-        "notes": payload.get("notes", {}),
         "geographic_scope": payload.get("geographic_scope", {}),
         "subject_areas": payload.get("subject_areas", []),
         "last_seen_at": event.timestamp,
     }
-    # Only set title/funder when the event carries them — attachment link events
-    # intentionally omit these fields and must not overwrite a prior publication event.
+    # Only set title/funder/notes when the event carries them — attachment link
+    # events intentionally omit these fields and must not overwrite a prior
+    # publication event.
     if payload.get("title"):
         defaults["title"] = payload["title"]
     if payload.get("funder_name_raw"):
         defaults["funder_name_raw"] = payload["funder_name_raw"]
+    if payload.get("notes"):
+        defaults["notes"] = payload["notes"]
     if payload.get("application_close_at"):
         defaults["application_close_at"] = payload["application_close_at"]
     if payload.get("application_open_at"):
