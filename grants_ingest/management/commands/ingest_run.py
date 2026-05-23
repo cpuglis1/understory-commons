@@ -8,6 +8,8 @@ from pathlib import Path
 import yaml
 from django.core.management.base import BaseCommand, CommandError
 
+from grants_ingest.adapters.dc_moca import DCMOCAAdapter
+from grants_ingest.adapters.dc_ost import DCOSTAdapter
 from grants_ingest.adapters.event_log import EventLogWriter
 from grants_ingest.adapters.grants_gov import GrantsGovAdapter
 from grants_ingest.adapters.irs_990pf import IRS990PFAdapter
@@ -27,7 +29,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--source",
             required=True,
-            choices=["propublica_np", "irs_990pf", "grants_gov"],
+            choices=["propublica_np", "irs_990pf", "grants_gov", "gov_dc_ost", "gov_dc_moca"],
         )
         parser.add_argument("--seed-list", default=str(SEEDS_DIR / "dmv_foundations.yml"))
         parser.add_argument(
@@ -76,6 +78,10 @@ def _build_adapter(source: str, store, event_log, options):
         )
     if source == "grants_gov":
         return GrantsGovAdapter(store=store, event_log=event_log)
+    if source == "gov_dc_ost":
+        return DCOSTAdapter(store=store, event_log=event_log)
+    if source == "gov_dc_moca":
+        return DCMOCAAdapter(store=store, event_log=event_log)
     raise CommandError(f"Unknown source: {source}")
 
 
