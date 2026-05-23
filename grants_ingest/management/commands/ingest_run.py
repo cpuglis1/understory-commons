@@ -8,6 +8,9 @@ from pathlib import Path
 import yaml
 from django.core.management.base import BaseCommand, CommandError
 
+from grants_ingest.adapters.dc_cah import DCAHAdapter
+from grants_ingest.adapters.dc_eventsdc import DCEventsDCAdapter
+from grants_ingest.adapters.dc_humanitiesdc import DCHumanitiesDCAdapter
 from grants_ingest.adapters.dc_moca import DCMOCAAdapter
 from grants_ingest.adapters.dc_ost import DCOSTAdapter
 from grants_ingest.adapters.event_log import EventLogWriter
@@ -29,7 +32,16 @@ class Command(BaseCommand):
         parser.add_argument(
             "--source",
             required=True,
-            choices=["propublica_np", "irs_990pf", "grants_gov", "gov_dc_ost", "gov_dc_moca"],
+            choices=[
+                "propublica_np",
+                "irs_990pf",
+                "grants_gov",
+                "gov_dc_ost",
+                "gov_dc_moca",
+                "gov_dc_cah",
+                "dc_humanitiesdc",
+                "dc_eventsdc",
+            ],
         )
         parser.add_argument("--seed-list", default=str(SEEDS_DIR / "dmv_foundations.yml"))
         parser.add_argument(
@@ -82,6 +94,12 @@ def _build_adapter(source: str, store, event_log, options):
         return DCOSTAdapter(store=store, event_log=event_log)
     if source == "gov_dc_moca":
         return DCMOCAAdapter(store=store, event_log=event_log)
+    if source == "gov_dc_cah":
+        return DCAHAdapter(store=store, event_log=event_log)
+    if source == "dc_humanitiesdc":
+        return DCHumanitiesDCAdapter(store=store, event_log=event_log)
+    if source == "dc_eventsdc":
+        return DCEventsDCAdapter(store=store, event_log=event_log)
     raise CommandError(f"Unknown source: {source}")
 
 
