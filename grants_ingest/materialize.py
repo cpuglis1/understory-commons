@@ -156,13 +156,15 @@ def _apply_opportunity_seen(event: CorpusEvent) -> None:
 
     first_seen = event.timestamp
     defaults: dict = {
-        "geographic_scope": payload.get("geographic_scope", {}),
-        "subject_areas": payload.get("subject_areas", []),
         "last_seen_at": event.timestamp,
     }
-    # Only set title/funder/notes when the event carries them — attachment link
-    # events intentionally omit these fields and must not overwrite a prior
-    # publication event.
+    # Only set fields when the event payload carries them — attachment link
+    # events intentionally omit most fields and must not overwrite a prior
+    # publication event with empty values.
+    if payload.get("geographic_scope"):
+        defaults["geographic_scope"] = payload["geographic_scope"]
+    if payload.get("subject_areas"):
+        defaults["subject_areas"] = payload["subject_areas"]
     if payload.get("title"):
         defaults["title"] = payload["title"]
     if payload.get("funder_name_raw"):
@@ -173,6 +175,10 @@ def _apply_opportunity_seen(event: CorpusEvent) -> None:
         defaults["application_close_at"] = payload["application_close_at"]
     if payload.get("application_open_at"):
         defaults["application_open_at"] = payload["application_open_at"]
+    if payload.get("status"):
+        defaults["status"] = payload["status"]
+    if payload.get("eligibility"):
+        defaults["eligibility"] = payload["eligibility"]
     for field in ("award_min", "award_max", "total_pool"):
         if payload.get(field) is not None:
             with contextlib.suppress(InvalidOperation):
@@ -235,11 +241,30 @@ def _apply_opportunity_updated(event: CorpusEvent) -> None:
     if payload.get("title"):
         opp.title = payload["title"]
         update_fields.append("title")
+    if payload.get("funder_name_raw"):
+        opp.funder_name_raw = payload["funder_name_raw"]
+        update_fields.append("funder_name_raw")
     if payload.get("notes"):
         merged = opp.notes or {}
         merged.update(payload["notes"])
         opp.notes = merged
         update_fields.append("notes")
+    if payload.get("status"):
+        opp.status = payload["status"]
+        update_fields.append("status")
+    if payload.get("subject_areas"):
+        opp.subject_areas = payload["subject_areas"]
+        update_fields.append("subject_areas")
+    if payload.get("eligibility"):
+        merged_elig = opp.eligibility or {}
+        merged_elig.update(payload["eligibility"])
+        opp.eligibility = merged_elig
+        update_fields.append("eligibility")
+    for field in ("award_min", "award_max"):
+        if payload.get(field) is not None:
+            with contextlib.suppress(InvalidOperation):
+                setattr(opp, field, Decimal(str(payload[field])))
+                update_fields.append(field)
 
     opp.save(update_fields=update_fields)
 
