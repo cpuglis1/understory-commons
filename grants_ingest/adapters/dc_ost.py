@@ -23,7 +23,7 @@ from grants_ingest.corpus_event import CorpusEventType
 from grants_ingest.raw_record import RawRecord
 
 from .base import _DEFAULT_HEADERS, BaseAdapter
-from .dc_html_util import extract_title, fetch_attachment, scan_hrefs
+from .dc_html_util import build_structured_fields, extract_title, fetch_attachment, scan_hrefs
 from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,11 @@ class DCOSTAdapter(BaseAdapter):
         re.I,
     )
     _FUNDER_NAME: ClassVar[str] = "DC Office of Out of School Time Grants and Youth Outcomes"
+    _BASE_SUBJECT_AREAS: ClassVar[list[str]] = [
+        "youth_development",
+        "education",
+        "out_of_school_time",
+    ]
 
     def __init__(self, store, event_log) -> None:
         super().__init__(store, event_log)
@@ -84,6 +89,7 @@ class DCOSTAdapter(BaseAdapter):
                 },
             )
 
+        structured = build_structured_fields(body, title, self._BASE_SUBJECT_AREAS)
         return [
             (
                 CorpusEventType.OPPORTUNITY_SEEN,
@@ -93,6 +99,7 @@ class DCOSTAdapter(BaseAdapter):
                     "title": title,
                     "funder_name_raw": self._FUNDER_NAME,
                     "content_sha": raw.content_sha,
+                    **structured,
                 },
             )
         ]

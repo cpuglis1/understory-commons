@@ -22,7 +22,7 @@ from grants_ingest.corpus_event import CorpusEventType
 from grants_ingest.raw_record import RawRecord
 
 from .base import _DEFAULT_HEADERS, BaseAdapter
-from .dc_html_util import extract_title, fetch_attachment, scan_hrefs
+from .dc_html_util import build_structured_fields, extract_title, fetch_attachment, scan_hrefs
 from .http import RobotsBlocked
 from .types import AdapterRunResult, FetchTask
 
@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://dcarts.dc.gov"
 _FUNDER_NAME = "DC Commission on the Arts and Humanities"
+_BASE_SUBJECT_AREAS = ["arts", "humanities"]
 
 
 class DCAHAdapter(BaseAdapter):
@@ -119,6 +120,7 @@ class DCAHAdapter(BaseAdapter):
         title = extract_title(body)
         external_id = f"gov_dc_cah:{detail_url}"
 
+        structured = build_structured_fields(body, title, _BASE_SUBJECT_AREAS)
         self.event_log.append(
             CorpusEventType.OPPORTUNITY_SEEN,
             content_sha=det_raw.content_sha,
@@ -128,6 +130,7 @@ class DCAHAdapter(BaseAdapter):
                 "title": title,
                 "funder_name_raw": _FUNDER_NAME,
                 "content_sha": det_raw.content_sha,
+                **structured,
             },
         )
 

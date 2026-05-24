@@ -26,13 +26,14 @@ from grants_ingest.corpus_event import CorpusEventType
 from grants_ingest.raw_record import RawRecord
 
 from .base import _DEFAULT_HEADERS, BaseAdapter
-from .dc_html_util import extract_title, fetch_attachment, scan_hrefs
+from .dc_html_util import build_structured_fields, extract_title, fetch_attachment, scan_hrefs
 from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://eventsdc.com"
 _FUNDER_NAME = "Events DC"
+_BASE_SUBJECT_AREAS = ["youth_development", "arts", "athletics"]
 
 
 class DCEventsDCAdapter(BaseAdapter):
@@ -66,6 +67,7 @@ class DCEventsDCAdapter(BaseAdapter):
                 {"url": url, "index_sha": raw.content_sha, "external_id": external_id}
             )
 
+        structured = build_structured_fields(body, title, _BASE_SUBJECT_AREAS)
         return [
             (
                 CorpusEventType.OPPORTUNITY_SEEN,
@@ -75,6 +77,7 @@ class DCEventsDCAdapter(BaseAdapter):
                     "title": title,
                     "funder_name_raw": _FUNDER_NAME,
                     "content_sha": raw.content_sha,
+                    **structured,
                 },
             )
         ]
