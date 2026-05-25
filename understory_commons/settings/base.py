@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "core",
     "accounts",
     "attendance",
+    "grants_ingest",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -70,6 +71,11 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
 SITE_URL = config("SITE_URL", default="http://localhost:8000")
+
+# --- Grants ingest ---
+RAW_OBJECT_STORE_BACKEND = config("RAW_OBJECT_STORE_BACKEND", default="fs")
+RAW_OBJECT_STORE_FS_PATH = config("RAW_OBJECT_STORE_FS_PATH", default="/tmp/uc-corpus")
+RAW_OBJECT_STORE_S3_BUCKET = config("RAW_OBJECT_STORE_S3_BUCKET", default="")
 
 LOGGING = {
     "version": 1,

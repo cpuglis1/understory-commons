@@ -1,0 +1,165 @@
+# DMV-region foundation seed list for grants_ingest funder registry.
+#
+# EINs here drive propublica_np and irs_990pf adapter runs.
+# Source: ProPublica Nonprofit Explorer search API, verified 2026-05-19.
+# Curate: add/remove EINs before each registry refresh; keep notes field current.
+# EIN format: 9-digit string, zero-padded, no dashes.
+#
+# Promoted from dmv_seed.candidate.yaml — high + selected medium confidence only.
+# Dropped: Z. Smith Reynolds (peripheral/NC), Wallace Foundation (VA match is wrong org),
+#          all low-confidence entries. Unresolved foundations in backlog for slice 2.
+
+# ---- DC-based ---------------------------------------------------------------
+
+- ein: "526036989"
+  name: "Morris and Gwendolyn Cafritz Foundation"
+  state: DC
+  notes: "Major DC community grantmaker; arts, education, community services"
+
+- ein: "540597601"
+  name: "Public Welfare Foundation"
+  state: DC
+  notes: "Criminal justice and worker rights; some education crossover. API name: 'Public Welfare Foundation Inc'"
+
+- ein: "526054193"
+  name: "Bender Foundation"
+  state: DC
+  notes: "DC-area education and community development. API name: 'Bender Foundation Inc'"
+
+- ein: "474376653"
+  name: "Crimsonbridge Foundation"
+  state: DC
+  notes: "Education and community development, DC metro. API name: 'The Crimsonbridge Foundation Inc'"
+
+- ein: "521799774"
+  name: "The Summit Fund of Washington"
+  state: DC
+  notes: "DC community foundation; education and arts focus"
+
+- ein: "136162575"
+  name: "Wallace Genetic Foundation"
+  state: DC
+  notes: "Environment and sustainable agriculture; DC-registered. API name: 'Wallace Genetic Foundation Inc'"
+
+- ein: "226081122"
+  name: "Hill-Snowdon Foundation"
+  state: DC
+  notes: "Youth and community development, DC. API name: 'Hill Snowdon Foundation'"
+
+- ein: "237000192"
+  name: "Bainum Family Foundation"
+  state: DC
+  notes: "Early childhood and youth education focus, DC"
+
+- ein: "237343119"
+  name: "Greater Washington Community Foundation"
+  state: DC
+  notes: "Umbrella community foundation. Spec notes 'covered separately' — include for funder registry but may not have 990-PF filings."
+
+- ein: "510224656"
+  name: "Jack and Jill of America Foundation"
+  state: DC
+  notes: "Education and leadership programs for youth. API name: 'Jack And Jill Of America Foundation Inc'"
+
+# ---- MD-based ---------------------------------------------------------------
+
+- ein: "232855899"
+  name: "Morningstar Foundation"
+  state: MD
+  notes: "Maryland-based; education and community focus"
+
+- ein: "237324576"
+  name: "Healthcare Initiative Foundation"
+  state: MD
+  notes: "Health access and community health, Maryland"
+
+- ein: "521951681"
+  name: "Annie E. Casey Foundation"
+  state: MD
+  notes: "Major Baltimore foundation; child welfare, youth, family economic security. API name: 'Annie E Casey Foundation'"
+
+- ein: "526036106"
+  name: "Abell Foundation"
+  state: MD
+  notes: "Baltimore-focused; education, economic development, poverty. API name: 'The Abell Foundation Inc'"
+
+- ein: "526072964"
+  name: "France-Merrick Foundation"
+  state: MD
+  notes: "Arts and education, Maryland. API name: 'France Merrick Foundation Inc'"
+
+- ein: "522040073"
+  name: "Aaron and Lillie Straus Foundation"
+  state: MD
+  notes: "Maryland; education and community. API name: 'Aaron Straus And Lillie Straus Foundation Inc'"
+
+- ein: "521035731"
+  name: "Pearlstone Foundation"
+  state: MD
+  notes: "Full registered name: 'Peggy Meyerhoff Pearlstone Foundation Inc'; Maryland. Verify scope before use."
+
+- ein: "521691418"
+  name: "England Family Foundation"
+  state: MD
+  notes: "Maryland. Verify this is not a duplicate of Lois and Richard England Family Foundation (separate spec entry). API name: 'England Family Foundation Inc'"
+
+- ein: "201135004"
+  name: "Naomi and Nehemiah Cohen Foundation"
+  state: MD
+  notes: "Registered as 'Naomi And Nehemiah Cohen Foundation Virginia Corporation'; state MD in ProPublica. Verify incorporation state."
+
+- ein: "526058340"
+  name: "Clark-Winchcole Foundation"
+  state: MD
+  notes: "Maryland. API name drops hyphen: 'Clark Winchcole Foundation'"
+
+# ---- VA-based ---------------------------------------------------------------
+
+- ein: "541475954"
+  name: "Weissberg Foundation"
+  state: VA
+  notes: "Virginia; education and community development"
+
+- ein: "526051781"
+  name: "Philip L. Graham Fund"
+  state: VA
+  notes: "Private foundation; EIN confirmed via live ingest run 2026-05-19. API name: 'Philip L Graham Fund'"
+
+- ein: "530237223"
+  name: "Hattie M. Strong Foundation"
+  state: VA
+  notes: "Scholarships and education support. API name: 'Hattie M Strong Foundation'"
+
+- ein: "204062932"
+  name: "Northern Virginia Health Foundation"
+  state: VA
+  notes: "Health and education, Northern Virginia. API name: 'Northern Virginia Health Foundation Inc'"
+
+- ein: "541896244"
+  name: "Jack Kent Cooke Foundation"
+  state: VA
+  notes: "Scholarships for high-achieving low-income students"
+
+# ---- National funders with DMV grant activity --------------------------------
+# These are headquartered outside DMV but actively fund DMV education programs.
+# 990-PF grant data will show DMV-area recipients; include for recipient resolution.
+
+- ein: "136108163"
+  name: "Surdna Foundation"
+  state: NY
+  notes: "NY-based national foundation; funds DMV out-of-school time programs"
+
+- ein: "381211227"
+  name: "Charles Stewart Mott Foundation"
+  state: MI
+  notes: "MI-based national foundation; funds DMV/national OST and education programs"
+
+- ein: "131624021"
+  name: "William T. Grant Foundation"
+  state: NY
+  notes: "NY-based; national funder of youth research; OST grants in DMV"
+
+- ein: "226029397"
+  name: "Robert Wood Johnson Foundation"
+  state: NJ
+  notes: "NJ-based national health and education funder; DMV-active"

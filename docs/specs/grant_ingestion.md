@@ -127,6 +127,17 @@ Sources are tiered by structural quality of their data:
 - **Tier C (unstructured):** Bespoke HTML per page, PDFs, mixed content.
   Expensive, requires per-source extractor.
 
+Naming convention for the source register prefix:
+- `gov_<state>_*` — government executive-branch agencies drawing on
+  appropriations (e.g., `gov_dc_ost`, `gov_dc_moca`, `gov_dc_cah`).
+- `<state>_*` — state/region-bound public-ish funders that are NOT
+  executive-branch agencies: federally chartered 501(c)(3) state
+  humanities councils, quasi-public instrumentalities, etc.
+  (e.g., `dc_humanitiesdc`, `dc_eventsdc`).
+- `cf_*` — community foundations.
+- `pf_*` — private foundations.
+- `uw*` — United Way affiliates.
+
 | ID | Source | Tier | Cadence | Adapter style |
 |----|--------|------|---------|---------------|
 | `irs_990pf` | IRS 990-PF filings | A | Quarterly | Batch XML downloader |
@@ -138,7 +149,12 @@ Sources are tiered by structural quality of their data:
 | `cf_pgcf` | Prince George's CF | B/C | Weekly | Per-portal scraper |
 | `cf_*` | Other DMV community foundations | B/C | Weekly | Per-portal scraper |
 | `pf_*` | DMV private foundations (~50) | C | Weekly | Config-driven, per-foundation |
-| `gov_dc_osse`, `gov_dc_dpr`, `gov_dc_opportunities` | DC agencies | B/C | Daily | Per-portal scraper |
+| `gov_dc_ost` | DC OST Office (learn24.dc.gov) | B | Weekly | Two-pass: index + native PDF |
+| `gov_dc_moca` | DC MOCA clearinghouse (communityaffairs.dc.gov) | B | Weekly | Three-pass: index → pub pages → attachments |
+| `gov_dc_cah` | DC Commission on Arts and Humanities (dcarts.dc.gov) | B | Weekly | Two-pass: index → detail pages + PDF scan |
+| `dc_humanitiesdc` | HumanitiesDC (humanitiesdc.org) | B | Weekly | Two-pass: index + native PDFs |
+| `dc_eventsdc` | Events DC (eventsdc.com) | B | Weekly | One-pass + PDF fetch |
+| `gov_dc_osse`, `gov_dc_dpr` | DC agencies (future slices) | B/C | Daily | Per-portal scraper |
 | `gov_md_msde`, `gov_md_mococcyf`, `gov_md_pgocfys` | MD agencies + counties | B/C | Daily | Per-portal scraper |
 | `gov_va_doe`, `gov_va_ffx_ccfp`, `gov_va_arl`, `gov_va_alx`, `gov_va_loudoun` | VA agencies + counties | B/C | Daily | Per-portal scraper |
 | `uwnca` | United Way NCA | B/C | Weekly | Per-portal scraper |
@@ -511,11 +527,21 @@ in the $20K-$150K range). They have crisper structure than foundation pages
 ### Target portals (initial set)
 
 DC:
-- DC OSSE (osse.dc.gov) — out-of-school time, 21st CCLC, ELP
-- DC DPR (dpr.dc.gov) — programming partnerships
-- opportunities.dc.gov — citywide RFP/grant portal
-- DC Office of Victim Services and Justice Grants
-- DC Children and Youth Investment Trust (CYITC) — defunct but archived RFPs informative
+- DC OST Office (learn24.dc.gov) — shipped as `gov_dc_ost` (slice 3a)
+- DC MOCA clearinghouse (communityaffairs.dc.gov) — shipped as `gov_dc_moca` (slice 3a)
+- DC Commission on the Arts and Humanities (dcarts.dc.gov) — shipped as `gov_dc_cah` (slice 3a)
+- HumanitiesDC (humanitiesdc.org) — shipped as `dc_humanitiesdc` (slice 3a)
+- Events DC (eventsdc.com) — shipped as `dc_eventsdc` (slice 3a)
+- DC OSSE (osse.dc.gov) — out-of-school time, 21st CCLC, ELP (future)
+- DC DPR (dpr.dc.gov) — programming partnerships (future)
+- DC Office of Victim Services and Justice Grants (future; OSSE/DOES/OVSJG NOFAs are visible
+  via `gov_dc_moca` as a side effect)
+
+Removed (confirmed dead 2026-05-23):
+- opportunities.dc.gov — connection refused
+- opgs.dc.gov — redirects to ServesDC (volunteerism, not grants)
+- DC Children and Youth Investment Trust (CYITC) — defunct since 2017,
+  superseded by the DC OST Office (learn24.dc.gov)
 
 Maryland:
 - MSDE (marylandpublicschools.org) — 21st CCLC, Title programs

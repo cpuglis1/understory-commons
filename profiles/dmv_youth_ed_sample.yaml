@@ -1,0 +1,30 @@
+# find_grants profile: DMV youth education opportunities
+# Run: python manage.py find_grants --profile profiles/dmv_youth_ed_sample.yaml
+
+name: DMV Youth Education
+description: >
+  Federal and philanthropic grants for nonprofit youth education programs
+  in the DC/MD/VA region. Open opportunities with award ceiling >= $10,000.
+
+filters:
+  # Only include opportunities still open (close_date in the future or unknown)
+  open_only: true
+
+  # Award range (either bound is optional)
+  award_min_gte: 10000       # skip micro-grants under $10k
+  # award_max_lte: 500000    # uncomment to cap at $500k
+
+  # Source filter (omit to include all sources)
+  # sources:
+  #   - grants_gov
+
+  # Subject-area codes (OR logic — any match passes)
+  # Grants.gov categories: E=Education, ED=Education, HL=Health
+  subject_areas:
+    - E
+    - ED
+    - HL
+    - education
+
+  # Funder name fragment (case-insensitive substring, optional)
+  # funder_name_contains: "education"

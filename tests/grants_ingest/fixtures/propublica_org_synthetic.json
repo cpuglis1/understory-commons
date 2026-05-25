@@ -1,0 +1,29 @@
+{
+  "organization": {
+    "ein": 990000040,
+    "name": "Synthetic Youth Foundation for Testing",
+    "address": "1 Test Lane",
+    "city": "Springfield",
+    "state": "DC",
+    "zipcode": "20001",
+    "ntee_code": "B90",
+    "subsection_code": 92,
+    "foundation_code": 4,
+    "totrevenue": 5000000
+  },
+  "filings_with_data": [
+    {
+      "tax_prd_yr": 2022,
+      "formtype": 2,
+      "pdf_url": "https://projects.propublica.org/nonprofits/download-filing?path=IRS%2F990000040_202204_990PF_2022050112345678.pdf",
+      "totrevenue": 4800000
+    },
+    {
+      "tax_prd_yr": 2021,
+      "formtype": 2,
+      "pdf_url": "https://projects.propublica.org/nonprofits/download-filing?path=IRS%2F990000040_202104_990PF_2021050187654321.pdf",
+      "totrevenue": 4200000
+    }
+  ],
+  "filings_without_data": []
+}

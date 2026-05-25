@@ -165,10 +165,11 @@ If any of these are unclear, ask in chat rather than guessing in code:
 
 > Update this section at the start of each phase. Stale phase context is worse than no phase context.
 
-**Phase:** Phase 1 — Scaffold + Attendance MVP
-**Goal:** Working Django app on Railway with magic-link auth (coordinator + facilitator roles), core data model (Org → Program → Session → Participant → AttendanceRecord), and attendance capture with AI-assisted free-text parse + confirmation/disambiguation flow. Coordinator can view this week's attendance per program.
-**Out of scope this phase:** Donor surface, permission forms, timesheets, family comms, reports/exports, any styling beyond functional HTMX defaults.
-**Handoff target:** `/docs/handoffs/<date>-phase1.md`
+**Phase:** Grants ingest — slice 1 (funder registry from `irs_990pf` + `propublica_np`)
+**Goal:** New `grants_ingest` Django app with content-addressed object store, append-only event log, funder registry models, two Tier-A adapters (ProPublica Nonprofit Explorer + IRS 990-PF XML), materializer, exact-match entity resolver, and management commands. End state: running `ingest_run --source propublica_np` then `ingest_run --source irs_990pf` populates `Funder`, `FunderAlias`, and `HistoricalGrant` tables with every row traceable through the event log.
+**Out of scope this phase:** Any source other than `irs_990pf`/`propublica_np`, Playwright, PDF handling, LLM extraction, donor surface, Railway cron wiring, `OpportunityInstance` rows.
+**Plan:** `/docs/plans/2026-05-18-grants-ingest-funder-registry.md`
+**Handoff target:** `/docs/handoffs/2026-05-18-grants-impl-1.md`
 
 ---
 

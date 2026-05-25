@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Return xmlns="http://www.irs.gov/efile">
+  <ReturnHeader>
+    <TaxYear>2022</TaxYear>
+    <Filer>
+      <EIN>990000050</EIN>
+      <BusinessName>
+        <BusinessNameLine1Txt>Synthetic Private Foundation for Testing</BusinessNameLine1Txt>
+      </BusinessName>
+    </Filer>
+  </ReturnHeader>
+  <ReturnData>
+    <IRS990PF>
+      <!-- Part XV-1: Grants paid during year -->
+      <GrantOrContributionPdDurYrGrp>
+        <RecipientBusinessName>
+          <BusinessNameLine1Txt>Recipient Youth Org Alpha</BusinessNameLine1Txt>
+        </RecipientBusinessName>
+        <RecipientUSAddress>
+          <AddressLine1Txt>100 Main St</AddressLine1Txt>
+          <CityNm>Washington</CityNm>
+          <StateAbbreviationCd>DC</StateAbbreviationCd>
+          <ZIPCd>20001</ZIPCd>
+        </RecipientUSAddress>
+        <RecipientEIN>000000001</RecipientEIN>
+        <CashGrantAmt>25000</CashGrantAmt>
+        <GrantOrContributionPurposeTxt>Youth literacy programming</GrantOrContributionPurposeTxt>
+      </GrantOrContributionPdDurYrGrp>
+      <GrantOrContributionPdDurYrGrp>
+        <RecipientBusinessName>
+          <BusinessNameLine1Txt>Recipient After-School Org Beta</BusinessNameLine1Txt>
+        </RecipientBusinessName>
+        <RecipientUSAddress>
+          <AddressLine1Txt>200 Oak Ave</AddressLine1Txt>
+          <CityNm>Arlington</CityNm>
+          <StateAbbreviationCd>VA</StateAbbreviationCd>
+          <ZIPCd>22201</ZIPCd>
+        </RecipientUSAddress>
+        <CashGrantAmt>15000</CashGrantAmt>
+        <GrantOrContributionPurposeTxt>After-school tutoring</GrantOrContributionPurposeTxt>
+        <RecipientRelationshipTxt>None</RecipientRelationshipTxt>
+      </GrantOrContributionPdDurYrGrp>
+      <!-- Part XV-2: Application information -->
+      <ApplicationSubmissionInfoTxt>Applications accepted by invitation only. Contact grants@synthetic-test.example.com.</ApplicationSubmissionInfoTxt>
+      <DistributionToOrganizationsTxt>Grants limited to DC, MD, and VA nonprofits serving youth ages 5-18.</DistributionToOrganizationsTxt>
+      <LimitationOnAwardsTxt>Awards typically range from $10,000 to $50,000.</LimitationOnAwardsTxt>
+    </IRS990PF>
+  </ReturnData>
+</Return>
