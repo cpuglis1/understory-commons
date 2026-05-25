@@ -1,13 +1,13 @@
-"""DCAHAdapter — DC Commission on the Arts and Humanities (dcarts.dc.gov).
+"""CommunityFoundationGWCFAdapter — Greater Washington Community Foundation.
+
+Source: thecommunityfoundation.org
+Static HTML (Squarespace) — plain httpx, no Playwright needed.
 
 Two-pass fetch:
-  Pass 1: GET index page, discover /grants/{slug} and /public-art/{slug} links.
-  Pass 2: GET each detail page, emit OPPORTUNITY_SEEN, scan for native PDFs
-          and fetch any found as secondary RawRecords.
-
-The plan's expected RFA PDFs (FY27 cycle) are "scheduled for spring/summer 2026"
-and were not yet posted at the time of source survey. The adapter scans for them
-on each weekly run and picks them up automatically when posted.
+  Pass 1: GET /open-grant-opportunities, discover /open-grant-opportunities/{slug}
+          detail links. No OPPORTUNITY_SEEN emitted for the index itself.
+  Pass 2: GET each detail page → emit OPPORTUNITY_SEEN with all extractable fields.
+          Scan for natively-linked PDFs and fetch as secondary RawRecords.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import ClassVar
 import httpx
 
 from grants_ingest.corpus_event import CorpusEventType
+from grants_ingest.extraction.structured import html_to_text
 from grants_ingest.raw_record import RawRecord
 
 from .base import _DEFAULT_HEADERS, BaseAdapter
@@ -28,27 +29,42 @@ from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://dcarts.dc.gov"
-_FUNDER_NAME = "DC Commission on the Arts and Humanities"
-_BASE_SUBJECT_AREAS = ["arts", "humanities"]
+_BASE_URL = "https://www.thecommunityfoundation.org"
+_FUNDER_NAME = "Greater Washington Community Foundation"
+_BASE_SUBJECT_AREAS: list[str] = []
+_DESCRIPTION_MAX_CHARS = 1500
+
+_SCRIPT_RE = re.compile(r"<script[^>]*>.*?</script>", re.S | re.I)
+_STYLE_RE = re.compile(r"<style[^>]*>.*?</style>", re.S | re.I)
+_MAIN_RE = re.compile(r"<main[^>]*>(.*?)</main>", re.S | re.I)
 
 
-class DCAHAdapter(BaseAdapter):
-    source_id: ClassVar[str] = "gov_dc_cah"
+class CommunityFoundationGWCFAdapter(BaseAdapter):
+    source_id: ClassVar[str] = "cf_gwcf"
     version: ClassVar[str] = "0.1.0"
-    rate_limit_per_sec: ClassVar[float] = 0.1  # Crawl-delay: 10 per robots.txt
+    rate_limit_per_sec: ClassVar[float] = 1 / 3  # 1 req / 3 s, courtesy limit
     robots_compliance: ClassVar[str] = "strict"
 
-    _INDEX_URL: ClassVar[str] = f"{_BASE_URL}/page/grant-programs"
+    _INDEX_URL: ClassVar[str] = f"{_BASE_URL}/open-grant-opportunities"
 
-    # Matches /grants/{slug} and /public-art/{slug} hrefs (relative or absolute).
-    # Excludes the index itself (/grants/grant-programs).
+    # Matches /open-grant-opportunities/{slug} — relative or absolute, slug required.
     _DETAIL_RE: ClassVar[re.Pattern] = re.compile(
-        r'href=["\'](?:https?://dcarts\.dc\.gov)?' r'(/(?:grants|public-art)/[^"\'?#]+)["\']',
+        r'href=["\']((?:https?://www\.thecommunityfoundation\.org)?'
+        r"/open-grant-opportunities/[^\"'?#]+)[\"']",
         re.I,
     )
+
+    # Known application portal domains captured into notes['apply_url'].
+    _APPLY_URL_RE: ClassVar[re.Pattern] = re.compile(
+        r'href=["\'](https?://[^"\']*'
+        r"(?:grantrequest|submittable|foundant|fluxx|cybergrants|smapply|instrumentl)"
+        r'[^"\']+)["\']',
+        re.I,
+    )
+
+    # Any .pdf href — future-proof for natively-linked PDFs.
     _PDF_RE: ClassVar[re.Pattern] = re.compile(
-        r'href=["\']((?:https?://dcarts\.dc\.gov)?/sites/default/files/[^"\']+\.pdf)["\']',
+        r'href=["\'](https?://[^"\']+\.pdf)["\']',
         re.I,
     )
 
@@ -61,13 +77,10 @@ class DCAHAdapter(BaseAdapter):
         yield FetchTask(url=self._INDEX_URL, expected_mime="text/html")
 
     def parse(self, raw: RawRecord) -> list:
-        """Scan index page for detail links. No OPPORTUNITY_SEEN for the index itself."""
+        """Scan index for detail links. Returns [] — no OPPORTUNITY_SEEN for the index."""
         body = self.store.get(raw.content_sha)
         seen: set[str] = set()
         for href in scan_hrefs(body, self._DETAIL_RE):
-            # Skip the index page's self-reference
-            if href.rstrip("/").endswith("/grant-programs"):
-                continue
             url = href if href.startswith("http") else f"{_BASE_URL}{href}"
             if url not in seen:
                 seen.add(url)
@@ -77,12 +90,10 @@ class DCAHAdapter(BaseAdapter):
     def run(self, **kwargs) -> AdapterRunResult:
         result = super().run(**kwargs)
 
-        # Pass 2: detail pages
         with httpx.Client(follow_redirects=True, headers=_DEFAULT_HEADERS) as client:
             for detail_url in self._detail_queue:
                 self._fetch_detail(detail_url, client, result)
 
-        # PDF attachments (when present on detail pages)
         if self._pdf_queue:
             with httpx.Client(follow_redirects=True, headers=_DEFAULT_HEADERS) as client:
                 for item in self._pdf_queue:
@@ -117,10 +128,28 @@ class DCAHAdapter(BaseAdapter):
             result.stored_new += 1
 
         body = self.store.get(det_raw.content_sha)
-        title = extract_title(body)
-        external_id = f"gov_dc_cah:{detail_url}"
+        # Squarespace titles use em-dash separator: "Title — Greater Washington CF"
+        title = extract_title(body, sep=" — ")
+        external_id = f"cf_gwcf:{detail_url}"
 
         structured = build_structured_fields(body, title, _BASE_SUBJECT_AREAS)
+
+        notes: dict = {}
+
+        raw_html = body.decode("utf-8", errors="ignore")
+        apply_m = self._APPLY_URL_RE.search(raw_html)
+        if apply_m:
+            notes["apply_url"] = apply_m.group(1)
+
+        # Extract description from <main> to skip Squarespace nav boilerplate,
+        # then strip script/style remnants before converting to plain text.
+        main_m = _MAIN_RE.search(raw_html)
+        content_html = main_m.group(1) if main_m else raw_html
+        clean_html = _SCRIPT_RE.sub("", _STYLE_RE.sub("", content_html))
+        description = html_to_text(clean_html.encode())[:_DESCRIPTION_MAX_CHARS].strip()
+        if description:
+            notes["description"] = description
+
         self.event_log.append(
             CorpusEventType.OPPORTUNITY_SEEN,
             content_sha=det_raw.content_sha,
@@ -130,15 +159,15 @@ class DCAHAdapter(BaseAdapter):
                 "title": title,
                 "funder_name_raw": _FUNDER_NAME,
                 "content_sha": det_raw.content_sha,
+                "notes": notes,
                 **structured,
             },
         )
 
         for href in scan_hrefs(body, self._PDF_RE):
-            url = href if href.startswith("http") else f"{_BASE_URL}{href}"
             self._pdf_queue.append(
                 {
-                    "url": url,
+                    "url": href,
                     "parent_sha": det_raw.content_sha,
                     "external_id": external_id,
                 }

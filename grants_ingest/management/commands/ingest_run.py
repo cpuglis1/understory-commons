@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 from django.core.management.base import BaseCommand, CommandError
 
+from grants_ingest.adapters.cf_gwcf import CommunityFoundationGWCFAdapter
 from grants_ingest.adapters.dc_cah import DCAHAdapter
 from grants_ingest.adapters.dc_eventsdc import DCEventsDCAdapter
 from grants_ingest.adapters.dc_humanitiesdc import DCHumanitiesDCAdapter
@@ -41,6 +42,7 @@ class Command(BaseCommand):
                 "gov_dc_cah",
                 "dc_humanitiesdc",
                 "dc_eventsdc",
+                "cf_gwcf",
             ],
         )
         parser.add_argument("--seed-list", default=str(SEEDS_DIR / "dmv_foundations.yml"))
@@ -100,6 +102,8 @@ def _build_adapter(source: str, store, event_log, options):
         return DCHumanitiesDCAdapter(store=store, event_log=event_log)
     if source == "dc_eventsdc":
         return DCEventsDCAdapter(store=store, event_log=event_log)
+    if source == "cf_gwcf":
+        return CommunityFoundationGWCFAdapter(store=store, event_log=event_log)
     raise CommandError(f"Unknown source: {source}")
 
 

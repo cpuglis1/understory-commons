@@ -20,10 +20,17 @@ from typing import ClassVar
 import httpx
 
 from grants_ingest.corpus_event import CorpusEventType
+from grants_ingest.extraction.structured import extract_dc_agency
 from grants_ingest.raw_record import RawRecord
 
 from .base import _DEFAULT_HEADERS, BaseAdapter
-from .dc_html_util import extract_moca_agency, extract_title, fetch_attachment, scan_hrefs
+from .dc_html_util import (
+    build_structured_fields,
+    extract_moca_agency,
+    extract_title,
+    fetch_attachment,
+    scan_hrefs,
+)
 from .http import RobotsBlocked
 from .types import AdapterRunResult, FetchTask
 
@@ -31,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://communityaffairs.dc.gov"
 _FALLBACK_FUNDER = "DC Government (agency unresolved)"
+_BASE_SUBJECT_AREAS: list[str] = ["general"]
 
 
 class DCMOCAAdapter(BaseAdapter):
@@ -118,9 +126,25 @@ class DCMOCAAdapter(BaseAdapter):
 
         body = self.store.get(pub_raw.content_sha)
         title = extract_title(body)
-        funder_name_raw = extract_moca_agency(title) or _FALLBACK_FUNDER
+        # Title-level attribution first (abbreviations like OSSE, DOES in title).
+        # Body-level search as fallback — catches full agency names in Drupal
+        # sidebar, "Posted by" metadata, and description text.
+        from grants_ingest.extraction.structured import html_to_text
+
+        body_text = html_to_text(body)
+        funder_name_raw = (
+            extract_moca_agency(title) or extract_dc_agency(body_text) or _FALLBACK_FUNDER
+        )
         external_id = f"gov_dc_moca:{pub_url}"
 
+        structured = build_structured_fields(
+            body,
+            title,
+            _BASE_SUBJECT_AREAS,
+            agency_for_subject_areas=(
+                funder_name_raw if funder_name_raw != _FALLBACK_FUNDER else None
+            ),
+        )
         self.event_log.append(
             CorpusEventType.OPPORTUNITY_SEEN,
             content_sha=pub_raw.content_sha,
@@ -130,6 +154,7 @@ class DCMOCAAdapter(BaseAdapter):
                 "title": title,
                 "funder_name_raw": funder_name_raw,
                 "content_sha": pub_raw.content_sha,
+                **structured,
             },
         )
 

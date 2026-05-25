@@ -23,7 +23,7 @@ from grants_ingest.corpus_event import CorpusEventType
 from grants_ingest.raw_record import RawRecord
 
 from .base import _DEFAULT_HEADERS, BaseAdapter
-from .dc_html_util import extract_title, fetch_attachment, scan_hrefs
+from .dc_html_util import build_structured_fields, extract_title, fetch_attachment, scan_hrefs
 from .types import AdapterRunResult, FetchTask
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://humanitiesdc.org"
 _FUNDER_NAME = "HumanitiesDC"
 _APPLY_PORTAL_URL = "https://www.grantinterface.com/Home/Logon?urlkey=wdchumanities"
+_BASE_SUBJECT_AREAS = ["humanities"]
 
 
 class DCHumanitiesDCAdapter(BaseAdapter):
@@ -63,6 +64,9 @@ class DCHumanitiesDCAdapter(BaseAdapter):
                 {"url": href, "index_sha": raw.content_sha, "external_id": external_id}
             )
 
+        structured = build_structured_fields(
+            body, title, _BASE_SUBJECT_AREAS, check_budget_cap=True
+        )
         return [
             (
                 CorpusEventType.OPPORTUNITY_SEEN,
@@ -73,6 +77,7 @@ class DCHumanitiesDCAdapter(BaseAdapter):
                     "funder_name_raw": _FUNDER_NAME,
                     "content_sha": raw.content_sha,
                     "notes": {"apply_url": _APPLY_PORTAL_URL},
+                    **structured,
                 },
             )
         ]
