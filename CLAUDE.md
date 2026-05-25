@@ -165,11 +165,11 @@ If any of these are unclear, ask in chat rather than guessing in code:
 
 > Update this section at the start of each phase. Stale phase context is worse than no phase context.
 
-**Phase:** Grants ingest — slice 1 (funder registry from `irs_990pf` + `propublica_np`)
-**Goal:** New `grants_ingest` Django app with content-addressed object store, append-only event log, funder registry models, two Tier-A adapters (ProPublica Nonprofit Explorer + IRS 990-PF XML), materializer, exact-match entity resolver, and management commands. End state: running `ingest_run --source propublica_np` then `ingest_run --source irs_990pf` populates `Funder`, `FunderAlias`, and `HistoricalGrant` tables with every row traceable through the event log.
-**Out of scope this phase:** Any source other than `irs_990pf`/`propublica_np`, Playwright, PDF handling, LLM extraction, donor surface, Railway cron wiring, `OpportunityInstance` rows.
-**Plan:** `/docs/plans/2026-05-18-grants-ingest-funder-registry.md`
-**Handoff target:** `/docs/handoffs/2026-05-18-grants-impl-1.md`
+**Phase:** Grants ingest — next adapter (TBD; see below)
+**Shipped:** Slices 1–4 merged to main (2026-05-24). Seven adapters live: `propublica_np`, `irs_990pf`, `grants_gov`, `gov_dc_ost`, `gov_dc_moca`, `gov_dc_cah`, `dc_humanitiesdc`, `dc_eventsdc`, `cf_gwcf`. Structured-field extraction (deadline, award range, org type, subject areas) wired into all DC/CF adapters. 81,424 `OpportunityInstance` rows; 57 non-grants_gov rows (DC + GWCF).
+**What's thin:** DC rows are mostly closed or award-amount-null (amounts are in PDFs). GWCF produced one scholarship, not a CBO grant. CF cycle is off-season.
+**Next candidates:** `pf_*` private foundation adapters (rolling applications, higher CBO relevance) or `uwnca`. Confirm a cycle is open before building.
+**Snapshot:** `corpus-2026-05-24-cf-gwcf` (event_log_position=329757)
 
 ---
 
@@ -179,3 +179,57 @@ Append a one-line entry per work session at `/docs/dev-log.md`:
 `<date> | <phase> | <model used> | <rough token estimate> | <what shipped> | <what stalled>`
 
 This is the instrumentation layer. After two weeks it becomes the dataset for tuning these routing rules.
+
+## Outcome over architecture
+
+Every slice must end with a thing a real CBO coordinator could use
+or a real funder could see. If a slice's deliverable is "schema X
+is now reproducible" or "adapter pattern Y is generalizable" with
+no user-visible output, the slice is misscoped. Rescope.
+
+Test for any proposed work: "what does a coordinator at a 30-student
+DC tutoring nonprofit do with this on Monday morning?" If the answer
+is "nothing yet, but in slice N+2 they will" — the work is too far
+upstream. Pull it forward or defer it.
+
+## Minimum-viable-grant-data principle
+
+For grant ingest specifically: we are not building a research-grade
+ML corpus. We are building a tool that surfaces currently-open,
+relevant grants to small DMV youth-ed CBOs. Every ingest decision
+serves that goal directly. Tier B/C extraction is not deferred
+"because Component 2 will handle it" — it's done at ingest with
+deterministic rules wherever the field is deterministically
+extractable. Component 2 exists for fields that genuinely require
+semantic understanding (eligibility prose, mission alignment), not
+for fields where Component 2 is shorthand for "I don't want to
+think about it now."
+
+## No new abstractions without a second use case
+
+Shared base classes, plugin systems, generic adapters, and similar
+generalizations land in the codebase only after a concrete second
+use case has appeared. The first instance is a script. The second
+instance might justify abstraction. Three is when the abstraction
+is real. Premature generalization is the dominant failure mode
+of this kind of work; resist it.
+
+## The fieldwork test for any planning session
+
+Before approving any plan that takes more than one session to
+implement: write one paragraph describing what a real DMV
+coordinator (Matthew Ratz at Passion for Learning is the reference
+persona) does differently after this work ships. If that paragraph
+is hard to write, the work is wrong-shaped. Either the plan is too
+infrastructural, or it should be three smaller plans where each
+one passes this test.
+
+## Honest assistant behavior
+
+The assistant should push back when a request would produce
+elaborate work that doesn't move the user closer to a fieldworkable
+artifact. "Build the eval harness for the retrieval model" is real
+ML work, but if no retrieval model exists yet and no opportunities
+need ranking yet, it's premature. Flag this, propose the smaller
+thing that would actually be used now, and let the user decide
+whether to overrule.
