@@ -3,6 +3,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.text import slugify
 
 
 class TimestampedModel(models.Model):
@@ -13,12 +14,34 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
+def _unique_slug(name: str, model_class, exclude_pk=None) -> str:
+    """Generate a URL-safe slug from *name*, appending -2/-3/… on collision."""
+    base = slugify(name) or "program"
+    slug = base
+    n = 1
+    qs = model_class.objects.all()
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    while qs.filter(slug=slug).exists():
+        n += 1
+        slug = f"{base}-{n}"
+    return slug
+
+
 class Organization(TimestampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    location = models.CharField(max_length=200, blank=True)
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = _unique_slug(self.name, Organization, exclude_pk=self.pk)
+        super().save(*args, **kwargs)
 
 
 class Program(TimestampedModel):
@@ -29,6 +52,8 @@ class Program(TimestampedModel):
         related_name="programs",
     )
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    summary = models.TextField(blank=True)
     site_label = models.CharField(max_length=200, blank=True)
     coordinator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -46,6 +71,11 @@ class Program(TimestampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = _unique_slug(self.name, Program, exclude_pk=self.pk)
+        super().save(*args, **kwargs)
 
     def clean(self) -> None:
         if (
@@ -78,3 +108,68 @@ class Session(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.program} — {self.scheduled_date}"
+
+
+class ProfileSnapshot(TimestampedModel):
+    """Append-only, versioned, published projection of a program's verified metrics.
+
+    A PUBLISHED snapshot is immutable. Re-publishing creates a superseding version.
+    Withdrawal is a new WITHDRAWN version — never a delete or mutation.
+    """
+
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    WITHDRAWN = "withdrawn"
+    STATUS_CHOICES = [
+        (DRAFT, "Draft"),
+        (PUBLISHED, "Published"),
+        (WITHDRAWN, "Withdrawn"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.PROTECT,
+        related_name="snapshots",
+    )
+    version = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=DRAFT)
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="published_snapshots",
+    )
+    supersedes = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="superseded_by",
+    )
+    payload = models.JSONField(default=dict)
+    coverage_start = models.DateField()
+    coverage_end = models.DateField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program", "version"],
+                name="unique_snapshot_version_per_program",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.program} v{self.version} ({self.status})"
+
+    def save(self, *args, **kwargs) -> None:
+        if not self._state.adding:
+            db_status = ProfileSnapshot.objects.values_list("status", flat=True).get(pk=self.pk)
+            if db_status == self.PUBLISHED:
+                raise ValueError(
+                    "ProfileSnapshot is immutable once published; "
+                    "create a new version to update."
+                )
+        super().save(*args, **kwargs)
