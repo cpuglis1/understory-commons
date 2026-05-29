@@ -5,8 +5,87 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Understory Commons{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --ink: #1d2a24;
+      --paper: #faf8f3;
+      --surface: #ffffff;
+      --line: #e2ded3;
+      --muted: #6b7269;
+      --accent: #b5651d;       /* clay */
+      --accent-soft: #f0e6da;
+      --ok: #3a6b4f;
+      --radius: 10px;
+      --shadow: 0 1px 2px rgba(29,42,36,.06), 0 4px 14px rgba(29,42,36,.05);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--paper); color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+    h1, h2, h3 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 600; letter-spacing: -0.01em; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header.site {
+      display: flex; align-items: baseline; gap: 1rem;
+      padding: 1rem 1.5rem; border-bottom: 1px solid var(--line); background: var(--surface);
+    }
+    header.site .brand { font-family: Georgia, serif; font-size: 1.15rem; font-weight: 600; }
+    header.site .who { margin-left: auto; color: var(--muted); font-size: .85rem; }
+    main { max-width: 880px; margin: 0 auto; padding: 1.75rem 1.5rem 4rem; }
+    .crumbs { font-size: .85rem; color: var(--muted); margin-bottom: 1rem; }
+    .card {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 1.1rem 1.25rem; margin-bottom: 1rem;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+    .stat { font-family: Georgia, serif; font-size: 1.9rem; line-height: 1; }
+    .stat .unit { font-family: inherit; font-size: .8rem; color: var(--muted); display: block; margin-top: .25rem; }
+    .muted { color: var(--muted); }
+    .pill {
+      display: inline-block; padding: .1rem .5rem; border-radius: 999px;
+      font-size: .72rem; background: var(--accent-soft); color: var(--accent);
+    }
+    .pill.present { background: #e2efe6; color: var(--ok); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--line); }
+    th { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+    button, .btn {
+      font: inherit; cursor: pointer; border: 1px solid var(--accent);
+      background: var(--accent); color: #fff; padding: .5rem .9rem;
+      border-radius: var(--radius); display: inline-block;
+    }
+    button:hover, .btn:hover { text-decoration: none; filter: brightness(1.05); }
+    .btn.secondary { background: transparent; color: var(--accent); }
+    input[type=text], input[type=date], input[type=email], textarea, select {
+      font: inherit; padding: .45rem .55rem; border: 1px solid var(--line);
+      border-radius: 8px; background: var(--surface); color: var(--ink);
+    }
+    label { font-size: .9rem; }
+    .messages { list-style: none; padding: 0; margin: 0 0 1rem; }
+    .messages li { padding: .6rem .9rem; border-radius: 8px; margin-bottom: .5rem; font-size: .9rem; }
+    .messages .success { background: #e2efe6; color: var(--ok); }
+    .messages .info { background: var(--accent-soft); color: var(--accent); }
+    .empty { text-align: center; color: var(--muted); padding: 2rem 1rem; }
+    .row-actions { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+  </style>
 </head>
 <body>
-  {% block content %}{% endblock %}
+  <header class="site">
+    <span class="brand"><a href="{% url 'attendance:dashboard' %}" style="color:inherit">Understory&nbsp;Commons</a></span>
+    {% if user.is_authenticated %}
+      <span class="who">{{ user.display_name }} · {{ user.get_role_display }}</span>
+    {% endif %}
+  </header>
+  <main>
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>
