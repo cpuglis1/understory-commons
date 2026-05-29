@@ -1,0 +1,33 @@
+{% extends "discovery/base.html" %}
+
+{% block title %}{{ payload.program.name }} — Understory Commons{% endblock %}
+
+{% block content %}
+  <h1>{{ payload.program.name }}</h1>
+  <p class="org-name">{{ payload.org.name }}{% if payload.program.site_label %} · {{ payload.program.site_label }}{% endif %}</p>
+
+  {% if payload.program.summary %}
+    <p class="summary">{{ payload.program.summary }}</p>
+  {% endif %}
+
+  <div class="metrics-grid">
+    {% for metric in payload.metrics %}
+      <div class="metric-card">
+        <div class="metric-value">{{ metric.value }}</div>
+        <div class="metric-label">{{ metric.label }}</div>
+        <div>
+          {% include "discovery/provenance_badge.html" with metric=metric %}
+        </div>
+        <div class="window">{{ metric.window }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if payload.org.description or payload.org.location %}
+    <div class="org-section">
+      <h2>About {{ payload.org.name }}</h2>
+      {% if payload.org.location %}<p>{{ payload.org.location }}</p>{% endif %}
+      {% if payload.org.description %}<p>{{ payload.org.description }}</p>{% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

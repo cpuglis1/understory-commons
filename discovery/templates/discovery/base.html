@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Understory Commons{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #fafaf9; color: #1c1917; line-height: 1.6; }
+    .container { max-width: 680px; margin: 0 auto; padding: 2rem 1rem; }
+    header { border-bottom: 1px solid #e7e5e4; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .wordmark { font-size: 0.875rem; font-weight: 600; text-transform: uppercase;
+                       letter-spacing: 0.05em; color: #78716c; text-decoration: none; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .org-name { color: #78716c; font-size: 1rem; margin-bottom: 1.5rem; }
+    .summary { margin-bottom: 2rem; }
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+    .metric-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+                   padding: 1.25rem; }
+    .metric-value { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+    .metric-label { font-size: 0.875rem; color: #78716c; margin-top: 0.25rem; }
+    .provenance-badge { display: inline-flex; align-items: center; gap: 0.35rem;
+                        font-size: 0.75rem; color: #15803d; background: #f0fdf4;
+                        border: 1px solid #bbf7d0; border-radius: 4px;
+                        padding: 0.15rem 0.5rem; margin-top: 0.5rem; }
+    .provenance-badge::before { content: "✓"; font-weight: 700; }
+    .window { font-size: 0.75rem; color: #a8a29e; }
+    .org-section { border-top: 1px solid #e7e5e4; padding-top: 1.5rem; }
+    .org-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .org-section p { font-size: 0.875rem; color: #57534e; }
+    footer { margin-top: 3rem; border-top: 1px solid #e7e5e4; padding-top: 1rem;
+             font-size: 0.75rem; color: #a8a29e; }
+    @media (max-width: 480px) { .metrics-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a class="wordmark" href="/">Understory Commons</a>
+    </header>
+    {% block content %}{% endblock %}
+    <footer>Numbers are derived from logged program activity — coordinators cannot edit them.</footer>
+  </div>
+</body>
+</html>

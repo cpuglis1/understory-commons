@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "accounts",
     "attendance",
     "grants_ingest",
+    "discovery",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
