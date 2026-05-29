@@ -93,6 +93,18 @@ def current_published(program: Program) -> ProfileSnapshot | None:
     return _current_published(program)
 
 
+def preview_payload(
+    program: Program,
+    coverage_start: datetime.date,
+    coverage_end: datetime.date,
+) -> dict:
+    """Compute what a snapshot payload would contain without saving anything."""
+    sessions = attendance_queries.sessions_held(program, coverage_start, coverage_end)
+    students = attendance_queries.students_attending(program, coverage_start, coverage_end)
+    window_label = f"{coverage_start}..{coverage_end}"
+    return _build_payload(program, coverage_start, coverage_end, sessions, students, window_label)
+
+
 # --- internal helpers ---
 
 

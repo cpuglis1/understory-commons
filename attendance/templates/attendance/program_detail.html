@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ program.name }} — Understory Commons{% endblock %}
+{% block content %}
+<h1>{{ program.name }}</h1>
+{% if program.site_label %}<p>{{ program.site_label }}</p>{% endif %}
+{% if program.summary %}<p>{{ program.summary }}</p>{% endif %}
+
+<hr>
+<h2>Public profile</h2>
+
+{% if published %}
+  <p>
+    Last published: {{ published.published_at|date:"N j, Y" }}
+    — coverage {{ published.coverage_start }} to {{ published.coverage_end }}
+    (v{{ published.version }})
+  </p>
+  <p><a href="{% url 'discovery:program_detail' program.slug %}" target="_blank">View public page</a></p>
+{% else %}
+  <p>No published profile yet.</p>
+{% endif %}
+
+<p>
+  <a href="{% url 'attendance:program_preview' program.slug %}">Preview this month ({{ coverage_start }} – {{ coverage_end }})</a>
+</p>
+
+<form method="post" action="{% url 'attendance:program_publish' program.slug %}">
+  {% csrf_token %}
+  <button type="submit">
+    Publish {{ coverage_start|date:"F Y" }}
+  </button>
+</form>
+{% endblock %}
