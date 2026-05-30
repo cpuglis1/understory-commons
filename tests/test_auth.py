@@ -83,7 +83,7 @@ def test_valid_token_logs_in_and_redirects(coordinator, client):
     path = f"/auth/magic/{token.token}/"
     response = client.get(path)
     assert response.status_code == 302
-    assert response.url == "/"
+    assert response.url == "/coordinator/programs/"
     assert SESSION_KEY in client.session
     assert client.session[SESSION_KEY] == str(coordinator.pk)
 
