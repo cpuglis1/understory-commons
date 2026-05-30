@@ -1,32 +1,48 @@
 {% extends "base.html" %}
 {% block title %}{{ program.name }} — Understory Commons{% endblock %}
+
+{% block extra_head %}
+<style>
+  .crumbs { font-size: 0.85rem; margin-bottom: 0.75rem; }
+  .detail-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1rem 0 1.5rem; }
+  .panel { border-top: 1px solid #e7e5e4; padding-top: 1.25rem; margin-top: 1.5rem; }
+  .panel form { margin-top: 0.75rem; }
+</style>
+{% endblock %}
+
 {% block content %}
+<p class="crumbs"><a href="{% url 'attendance:home' %}">← Home</a></p>
 <h1>{{ program.name }}</h1>
-{% if program.site_label %}<p>{{ program.site_label }}</p>{% endif %}
+{% if program.site_label %}<p class="muted">{{ program.site_label }}</p>{% endif %}
 {% if program.summary %}<p>{{ program.summary }}</p>{% endif %}
 
-<hr>
-<h2>Public profile</h2>
+<div class="detail-actions">
+  <a class="btn" href="{% url 'attendance:attendance_log' program.slug %}">Log attendance</a>
+</div>
 
-{% if published %}
+<div class="panel">
+  <h2>Public profile</h2>
+
+  {% if published %}
+    <p>
+      Last published: {{ published.published_at|date:"N j, Y" }}
+      — coverage {{ published.coverage_start }} to {{ published.coverage_end }}
+      (v{{ published.version }})
+    </p>
+    <p><a href="{% url 'discovery:program_detail' program.slug %}" target="_blank">View public page</a></p>
+  {% else %}
+    <p>No published profile yet.</p>
+  {% endif %}
+
   <p>
-    Last published: {{ published.published_at|date:"N j, Y" }}
-    — coverage {{ published.coverage_start }} to {{ published.coverage_end }}
-    (v{{ published.version }})
+    <a href="{% url 'attendance:program_preview' program.slug %}">Preview this month ({{ coverage_start }} – {{ coverage_end }})</a>
   </p>
-  <p><a href="{% url 'discovery:program_detail' program.slug %}" target="_blank">View public page</a></p>
-{% else %}
-  <p>No published profile yet.</p>
-{% endif %}
 
-<p>
-  <a href="{% url 'attendance:program_preview' program.slug %}">Preview this month ({{ coverage_start }} – {{ coverage_end }})</a>
-</p>
-
-<form method="post" action="{% url 'attendance:program_publish' program.slug %}">
-  {% csrf_token %}
-  <button type="submit">
-    Publish {{ coverage_start|date:"F Y" }}
-  </button>
-</form>
+  <form method="post" action="{% url 'attendance:program_publish' program.slug %}">
+    {% csrf_token %}
+    <button class="btn btn-secondary" type="submit">
+      Publish {{ coverage_start|date:"F Y" }}
+    </button>
+  </form>
+</div>
 {% endblock %}

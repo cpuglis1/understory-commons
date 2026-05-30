@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Home — Understory Commons{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lead { color: #78716c; margin-bottom: 1.5rem; }
+  .attention { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+               padding: 0.9rem 1rem; margin-bottom: 1.75rem; }
+  .attention h2 { margin: 0 0 0.4rem; font-size: 0.95rem; color: #92400e; }
+  .attention ul { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
+  .attention a { color: #92400e; }
+  .cards { display: grid; gap: 1rem; }
+  .card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+          padding: 1.1rem 1.2rem; }
+  .card-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .card-head h3 { font-size: 1.1rem; font-weight: 700; }
+  .card-site { color: #78716c; font-size: 0.85rem; }
+  .card-facts { font-size: 0.85rem; color: #57534e; margin: 0.5rem 0 0.9rem; }
+  .card-facts .flag { color: #b45309; font-weight: 600; }
+  .card-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .card-actions .links { font-size: 0.85rem; display: flex; gap: 0.9rem; }
+  .feed { list-style: none; padding: 0; }
+  .feed li { display: flex; gap: 0.75rem; padding: 0.6rem 0; border-top: 1px solid #f0efed;
+             font-size: 0.9rem; }
+  .feed .dot { flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-top: 0.45rem; }
+  .feed .dot.attendance { background: #15803d; }
+  .feed .dot.publish { background: #2563eb; }
+  .feed .when { color: #a8a29e; font-size: 0.8rem; }
+  .empty { color: #78716c; font-size: 0.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Home</h1>
+<p class="lead">Pick a program to log today's attendance.</p>
+
+{% if needs_attention %}
+<div class="attention">
+  <h2>Needs attention</h2>
+  <ul>
+    {% for card in needs_attention %}
+    <li>
+      <a href="{% url 'attendance:attendance_log' card.program.slug %}">{{ card.program.name }}</a>
+      — no attendance logged in the last 7 days
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="cards">
+  {% for card in cards %}
+  <div class="card">
+    <div class="card-head">
+      <h3>{{ card.program.name }}</h3>
+      {% if card.program.site_label %}<span class="card-site">{{ card.program.site_label }}</span>{% endif %}
+    </div>
+    <p class="card-facts">
+      {% if card.last_attendance_date %}
+        Last attendance: {{ card.last_attendance_date|date:"N j, Y" }}.
+      {% else %}
+        <span class="flag">No attendance logged yet.</span>
+      {% endif %}
+      {% if card.published %}
+        Public profile live (v{{ card.published.version }}).
+      {% else %}
+        Not yet published.
+      {% endif %}
+    </p>
+    <div class="card-actions">
+      <a class="btn" href="{% url 'attendance:attendance_log' card.program.slug %}">Log attendance</a>
+      <span class="links">
+        <a href="{% url 'attendance:program_detail' card.program.slug %}">Open program</a>
+        {% if card.published %}
+        <a href="{% url 'discovery:program_detail' card.program.slug %}" target="_blank">View public page</a>
+        {% endif %}
+      </span>
+    </div>
+  </div>
+  {% empty %}
+  <p class="empty">
+    You don't have any programs yet.
+    {% if request.user.role == "coordinator" %}
+      <a href="{% url 'attendance:program_new' %}">Create your first program</a>.
+    {% else %}
+      Ask your coordinator to assign you to one.
+    {% endif %}
+  </p>
+  {% endfor %}
+</div>
+
+<h2>Recent activity</h2>
+{% if activity %}
+<ul class="feed">
+  {% for item in activity %}
+  <li>
+    <span class="dot {{ item.kind }}"></span>
+    <span>
+      <strong>{{ item.program_name }}</strong> — {{ item.detail }}<br>
+      <span class="when">{{ item.actor_name }} · {{ item.when|date:"N j, Y, g:i a" }}</span>
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">No activity logged yet. It'll show up here as you record attendance and publish profiles.</p>
+{% endif %}
+{% endblock %}

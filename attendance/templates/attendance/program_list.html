@@ -1,14 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Programs — Understory Commons{% endblock %}
+
+{% block extra_head %}
+<style>
+  .program-row { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.6rem 0;
+                 border-top: 1px solid #f0efed; }
+  .program-row .site { color: #78716c; font-size: 0.85rem; }
+  .list-head { display: flex; align-items: center; justify-content: space-between;
+               gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1>Programs</h1>
-{% if request.user.role == "coordinator" %}
-  <p><a href="{% url 'attendance:program_new' %}">+ New program</a></p>
-{% endif %}
+<div class="list-head">
+  <h1>Programs</h1>
+  {% if request.user.role == "coordinator" %}
+    <a class="btn" href="{% url 'attendance:program_new' %}">+ New program</a>
+  {% endif %}
+</div>
 {% for program in programs %}
-  <p><a href="{% url 'attendance:program_detail' program.slug %}">{{ program.name }}</a>
-  {% if program.site_label %} — {{ program.site_label }}{% endif %}</p>
+  <div class="program-row">
+    <a href="{% url 'attendance:program_detail' program.slug %}">{{ program.name }}</a>
+    {% if program.site_label %}<span class="site">{{ program.site_label }}</span>{% endif %}
+  </div>
 {% empty %}
-  <p>No programs found.</p>
+  <p class="muted">No programs found.</p>
 {% endfor %}
 {% endblock %}

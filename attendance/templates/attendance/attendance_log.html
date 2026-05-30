@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Log attendance — {{ program.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .next { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+          padding: 1.25rem 1.4rem; margin-top: 1rem; }
+  .next p { margin-bottom: 0.75rem; }
+  .crumbs { font-size: 0.85rem; margin-bottom: 0.75rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="crumbs"><a href="{% url 'attendance:home' %}">← Home</a></p>
+<h1>Log attendance</h1>
+<p class="muted">{{ program.name }}{% if program.site_label %} · {{ program.site_label }}{% endif %}</p>
+
+<div class="next">
+  <p><strong>The attendance capture screen is the next slice.</strong> It will let you
+  check off a roster or paste a quick free-text note and have it parsed into records —
+  without leaving this page.</p>
+  <p>Until then, attendance is logged through the Django admin. That path goes through
+  the same append-only records, so anything you log there appears on your home and feeds
+  the public profile.</p>
+  <p>
+    <a class="btn btn-secondary" href="/admin/attendance/session/">Log via admin</a>
+  </p>
+</div>
+{% endblock %}

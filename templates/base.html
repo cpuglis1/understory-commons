@@ -5,8 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Understory Commons{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #fafaf9; color: #1c1917; line-height: 1.55; }
+    a { color: #15803d; }
+    .topbar { background: #fff; border-bottom: 1px solid #e7e5e4; }
+    .topbar-inner { max-width: 880px; margin: 0 auto; padding: 0.75rem 1rem;
+                    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .wordmark { font-size: 0.875rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: 0.05em; color: #1c1917; text-decoration: none; }
+    .topbar nav { display: flex; gap: 1rem; font-size: 0.9rem; }
+    .topbar nav a { color: #57534e; text-decoration: none; }
+    .topbar nav a:hover { color: #15803d; }
+    .topbar .who { margin-left: auto; font-size: 0.8rem; color: #78716c; text-align: right; }
+    .role-badge { display: inline-block; font-size: 0.7rem; text-transform: uppercase;
+                  letter-spacing: 0.04em; color: #78716c; background: #f5f5f4;
+                  border: 1px solid #e7e5e4; border-radius: 4px; padding: 0.05rem 0.4rem;
+                  margin-left: 0.35rem; }
+    .container { max-width: 880px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin: 1.75rem 0 0.75rem; }
+    .btn { display: inline-block; background: #15803d; color: #fff; text-decoration: none;
+           font-size: 0.9rem; font-weight: 600; border: 0; border-radius: 6px;
+           padding: 0.5rem 0.9rem; cursor: pointer; }
+    .btn:hover { background: #166534; }
+    .btn-secondary { background: #fff; color: #1c1917; border: 1px solid #d6d3d1; }
+    .btn-secondary:hover { background: #f5f5f4; }
+    .muted { color: #78716c; }
+    @media (max-width: 480px) {
+      .topbar .who { margin-left: 0; width: 100%; text-align: left; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
-  {% block content %}{% endblock %}
+  {% if request.user.is_authenticated %}
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="wordmark" href="{% url 'attendance:home' %}">Understory Commons</a>
+      <nav>
+        <a href="{% url 'attendance:home' %}">Home</a>
+        <a href="{% url 'attendance:program_list' %}">Programs</a>
+      </nav>
+      <span class="who">
+        {{ request.user.display_name }}
+        <span class="role-badge">{{ request.user.get_role_display }}</span>
+      </span>
+    </div>
+  </header>
+  {% endif %}
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
 </body>
 </html>

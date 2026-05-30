@@ -8,6 +8,7 @@ from accounts.decorators import coordinator_required, facilitator_or_coordinator
 from core.queries import programs_visible_to
 from core.services.snapshots import build_draft, current_published, preview_payload, publish
 
+from . import launchpad
 from .forms import ProgramCreateForm
 
 
@@ -17,6 +18,41 @@ def _current_month() -> tuple[datetime.date, datetime.date]:
     last_day = calendar.monthrange(today.year, today.month)[1]
     end = today.replace(day=last_day)
     return start, end
+
+
+@facilitator_or_coordinator_required
+def home(request):
+    """The coordinator launchpad: route into the work in one tap.
+
+    Shows every program the user may see (role-scoped), each with a primary
+    "Log attendance" CTA; a recent-activity strip of real logged events; and a
+    needs-attention list of programs whose attendance has lapsed.
+    """
+    programs = list(programs_visible_to(request.user).filter(is_archived=False).order_by("name"))
+    cards = launchpad.program_cards(programs)
+    return render(
+        request,
+        "attendance/home.html",
+        {
+            "cards": cards,
+            "activity": launchpad.recent_activity(programs),
+            "needs_attention": [card for card in cards if card.needs_attention],
+        },
+    )
+
+
+@facilitator_or_coordinator_required
+def attendance_log(request, slug: str):
+    """Stub destination for the home's "Log attendance" CTA.
+
+    The real capture screen is slice 2. This page exists so the launchpad's
+    primary action is never a dead end: it names what is coming and points to
+    the interim path (Django admin) for anyone who must log attendance today.
+    """
+    program = get_object_or_404(
+        programs_visible_to(request.user).filter(is_archived=False), slug=slug
+    )
+    return render(request, "attendance/attendance_log.html", {"program": program})
 
 
 @facilitator_or_coordinator_required
