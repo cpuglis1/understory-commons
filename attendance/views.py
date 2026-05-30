@@ -8,6 +8,8 @@ from accounts.decorators import coordinator_required, facilitator_or_coordinator
 from core.queries import programs_visible_to
 from core.services.snapshots import build_draft, current_published, preview_payload, publish
 
+from .forms import ProgramCreateForm
+
 
 def _current_month() -> tuple[datetime.date, datetime.date]:
     today = datetime.date.today()
@@ -21,6 +23,21 @@ def _current_month() -> tuple[datetime.date, datetime.date]:
 def program_list(request):
     programs = programs_visible_to(request.user).filter(is_archived=False).order_by("name")
     return render(request, "attendance/program_list.html", {"programs": programs})
+
+
+@coordinator_required
+def program_new(request):
+    if request.method == "POST":
+        form = ProgramCreateForm(request.POST)
+        if form.is_valid():
+            program = form.save(commit=False)
+            program.organization = request.user.organization
+            program.coordinator = request.user
+            program.save()
+            return redirect("attendance:program_detail", slug=program.slug)
+    else:
+        form = ProgramCreateForm()
+    return render(request, "attendance/program_new.html", {"form": form})
 
 
 @facilitator_or_coordinator_required

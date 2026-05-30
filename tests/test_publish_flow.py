@@ -52,6 +52,31 @@ def program(org, coordinator):
     )
 
 
+# --- program_new ---
+
+
+@pytest.mark.django_db
+def test_program_new_blocked_for_facilitator(facilitator, client):
+    client.force_login(facilitator)
+    response = client.get("/coordinator/programs/new/")
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_program_new_creates_in_own_org(coordinator, org, client):
+    client.force_login(coordinator)
+    response = client.post(
+        "/coordinator/programs/new/",
+        {"name": "Wednesday Math Club", "summary": "", "site_label": ""},
+    )
+    assert response.status_code == 302
+    created = Program.objects.get(name="Wednesday Math Club")
+    assert created.organization == org
+    assert created.coordinator == coordinator
+    assert created.slug  # auto-generated
+    assert response.url == f"/coordinator/programs/{created.slug}/"
+
+
 # --- program_list ---
 
 

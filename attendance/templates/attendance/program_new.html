@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}New program — Understory Commons{% endblock %}
+{% block content %}
+<h1>New program</h1>
+<p>This creates a program under your organization. You can log attendance and
+publish a public page once it exists.</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Create program</button>
+  <a href="{% url 'attendance:program_list' %}">Cancel</a>
+</form>
+{% endblock %}

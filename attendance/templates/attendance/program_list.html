@@ -2,6 +2,9 @@
 {% block title %}Programs — Understory Commons{% endblock %}
 {% block content %}
 <h1>Programs</h1>
+{% if request.user.role == "coordinator" %}
+  <p><a href="{% url 'attendance:program_new' %}">+ New program</a></p>
+{% endif %}
 {% for program in programs %}
   <p><a href="{% url 'attendance:program_detail' program.slug %}">{{ program.name }}</a>
   {% if program.site_label %} — {{ program.site_label }}{% endif %}</p>
