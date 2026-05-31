@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understory Commons — Director Dashboard (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Pinyon+Script&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0A0A; --muted:#6B7280; --line:#EAEAEA; --surface:#FFFFFF;
+    --panel:#FCFCFC; --tick:#16A34A;
+    --pill-live-bg:#F0FDF4; --pill-live-fg:#15803D; --pill-live-bd:#BBF7D0;
+    --pill-beta-bg:#FFFBEB; --pill-beta-fg:#B45309; --pill-beta-bd:#FDE68A;
+    --pill-soon-bg:#F4F4F5; --pill-soon-fg:#71717A; --pill-soon-bd:#E4E4E7;
+    --warn-bg:#FFFBEB; --warn-bd:#FDE68A; --warn-fg:#92400E;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,sans-serif;background:var(--surface);color:var(--ink);
+       -webkit-font-smoothing:antialiased;line-height:1.5}
+  a{color:inherit;text-decoration:none}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- top bar ---------- */
+  .topbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.85);
+    backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--line)}
+  .topbar-inner{max-width:1140px;margin:0 auto;height:60px;display:flex;align-items:center;
+    gap:28px;padding:0 24px}
+  .wordmark{font-family:'Pinyon Script',cursive;font-size:1.85rem;line-height:1;
+    color:var(--ink);white-space:nowrap;padding-top:6px}
+  .nav{display:flex;align-items:center;gap:22px;font-size:.875rem;font-weight:500}
+  .nav a,.nav button{color:#52525B;background:none;border:0;font:inherit;cursor:pointer;
+    display:inline-flex;align-items:center;gap:4px}
+  .nav a:hover,.nav button:hover{color:var(--ink)}
+  .nav a.active{color:var(--ink);font-weight:600}
+  .caret{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+  .spacer{flex:1}
+  .kbd{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);
+    border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:#fff}
+  .kbd kbd{font-family:Inter;font-size:.72rem;background:#F4F4F5;border:1px solid var(--line);
+    border-radius:4px;padding:0 4px}
+  .acct{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+  .avatar{width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;
+    font-size:.72rem;font-weight:700;display:grid;place-items:center}
+  .acct .name{font-size:.84rem;font-weight:500}
+  .acct .role{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+
+  /* ---------- tools mega-menu ---------- */
+  .mega-wrap{position:relative}
+  .mega{position:absolute;top:34px;left:-12px;width:760px;background:#fff;border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.10);padding:22px 24px;
+    display:none;grid-template-columns:repeat(3,1fr);gap:22px 28px}
+  .mega.open{display:grid}
+  .mega .cat{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    font-weight:700;margin-bottom:10px}
+  .mega ul{list-style:none}
+  .mega li{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:6px 8px;margin:0 -8px;border-radius:8px;font-size:.86rem;font-weight:500;color:#27272A}
+  .mega li:hover{background:#FAFAFA;color:var(--ink)}
+  .mega .foot{grid-column:1/-1;border-top:1px solid var(--line);margin-top:4px;padding-top:12px;
+    font-size:.75rem;color:var(--muted);display:flex;gap:18px;align-items:center}
+
+  /* ---------- pills ---------- */
+  .pill{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    padding:2px 7px;border-radius:999px;border:1px solid;white-space:nowrap}
+  .pill.live{background:var(--pill-live-bg);color:var(--pill-live-fg);border-color:var(--pill-live-bd)}
+  .pill.beta{background:var(--pill-beta-bg);color:var(--pill-beta-fg);border-color:var(--pill-beta-bd)}
+  .pill.soon{background:var(--pill-soon-bg);color:var(--pill-soon-fg);border-color:var(--pill-soon-bd)}
+
+  /* ---------- layout ---------- */
+  main{max-width:1140px;margin:0 auto;padding:34px 24px 80px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.7rem;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:.92rem;margin-top:4px}
+  .period{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+    background:#fff;border-radius:10px;padding:8px 12px;font-size:.84rem;font-weight:500;cursor:pointer}
+
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-top:24px}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;background:#fff}
+  .stat .v{font-size:2.1rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+  .stat .l{font-size:.74rem;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:5px}
+  .stat .l .tk{color:var(--tick);font-weight:800}
+  .stat.empty .v{color:#D4D4D8}
+
+  .section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    font-weight:700;margin:30px 0 12px}
+
+  .attn{border:1px solid var(--warn-bd);background:var(--warn-bg);border-radius:12px;overflow:hidden}
+  .attn .row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:12px 16px;border-top:1px solid #FBEFC6;font-size:.9rem}
+  .attn .row:first-child{border-top:0}
+  .attn .row .dotw{display:inline-flex;align-items:center;gap:9px}
+  .attn .row .dotw b{font-weight:600}
+  .attn .row .dotw .mk{color:var(--warn-fg)}
+  .attn .act{font-size:.78rem;font-weight:600;color:var(--ink);border:1px solid #E7D7A8;
+    background:#fff;border-radius:8px;padding:5px 11px;white-space:nowrap}
+
+  .grid2{display:grid;grid-template-columns:1.7fr 1fr;gap:24px;margin-top:6px}
+  .prog{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .prog .p{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:15px 16px;border-top:1px solid var(--line)}
+  .prog .p:first-child{border-top:0}
+  .prog .p .meta .nm{font-weight:600;font-size:.95rem}
+  .prog .p .meta .nm span{color:var(--muted);font-weight:400;margin-left:8px;font-size:.85rem}
+  .prog .p .facts{color:#52525B;font-size:.82rem;margin-top:3px}
+  .prog .p .facts .warn{color:var(--warn-fg);font-weight:600}
+  .dots{color:#A1A1AA;font-size:1.2rem;letter-spacing:1px;cursor:pointer;padding:0 4px}
+
+  .feed{border:1px solid var(--line);border-radius:12px;background:#fff;padding:4px 16px}
+  .feed .e{display:flex;gap:10px;padding:13px 0;border-top:1px solid #F4F4F5;font-size:.86rem}
+  .feed .e:first-child{border-top:0}
+  .feed .dot{flex:none;width:8px;height:8px;border-radius:50%;margin-top:6px;background:#0A0A0A}
+  .feed .dot.pub{background:#2563EB}
+  .feed .dot.fac{background:#9333EA}
+  .feed .e .t{color:var(--muted);font-size:.76rem;margin-top:2px}
+  .feed .more{display:block;padding:13px 0 6px;border-top:1px solid #F4F4F5;font-size:.82rem;
+    font-weight:600;color:var(--ink)}
+
+  .footnote{max-width:1140px;margin:0 auto;padding:0 24px 40px;color:#A1A1AA;font-size:.76rem}
+
+  @media(max-width:900px){
+    .stats{grid-template-columns:repeat(3,1fr)}
+    .grid2{grid-template-columns:1fr}
+    .nav .hideable{display:none}
+    .mega{width:92vw;left:0;grid-template-columns:repeat(2,1fr)}
+  }
+  @media(max-width:560px){ .stats{grid-template-columns:repeat(2,1fr)} .acct .name,.acct .role{display:none} }
+</style>
+</head>
+<body>
+
+<!-- ===================== TOP BAR ===================== -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="#">Understory Commons</a>
+    <nav class="nav">
+      <a href="#" class="active">Dashboard</a>
+      <a href="#" class="hideable">Programs</a>
+      <div class="mega-wrap hideable">
+        <button id="toolsBtn" aria-haspopup="true">Tools
+          <svg class="caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="mega" id="toolsMenu">
+          <div>
+            <div class="cat">Attendance &amp; Participation</div>
+            <ul>
+              <li>Log attendance <span class="pill live">Live</span></li>
+              <li>Roster &amp; history <span class="pill soon">Soon</span></li>
+              <li>Participation trends <span class="pill soon">Soon</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="cat">Forms &amp; Permissions</div>
+            <ul>
+              <li>Permission forms <span class="pill soon">Soon</span></li>
+              <li>Media / photo consent <span class="pill soon">Soon</span></li>
+              <li>Form status by program <span class="pill soon">Soon</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="cat">Staff &amp; Payroll</div>
+            <ul>
+              <li>Facilitators &amp; invites <span class="pill live">Live</span></li>
+              <li>Timesheets <span class="pill soon">Soon</span></li>
+              <li>Monthly payroll prep <span class="pill soon">Soon</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="cat">Family Communication</div>
+            <ul>
+              <li>Weekly update draft <span class="pill soon">Soon</span></li>
+              <li>Announcement draft <span class="pill soon">Soon</span></li>
+              <li>Generation only — you send <span class="pill soon">Soon</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="cat">Program Progress</div>
+            <ul>
+              <li>Project milestones <span class="pill soon">Soon</span></li>
+              <li>Photo &amp; testimonial intake <span class="pill soon">Soon</span></li>
+              <li>Satisfaction survey <span class="pill soon">Soon</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="cat">Funder &amp; Network</div>
+            <ul>
+              <li>Publish public profile <span class="pill live">Live</span></li>
+              <li>Public program page <span class="pill live">Live</span></li>
+              <li>Grant-report sections <span class="pill soon">Soon</span></li>
+              <li>Find grants (DMV youth-ed) <span class="pill beta">Beta</span></li>
+              <li>Export CSV / PDF <span class="pill soon">Soon</span></li>
+            </ul>
+          </div>
+          <div class="foot">
+            <span><span class="pill live">Live</span> working today</span>
+            <span><span class="pill beta">Beta</span> backend ready, UI thin</span>
+            <span><span class="pill soon">Soon</span> on the roadmap</span>
+          </div>
+        </div>
+      </div>
+      <a href="#" class="hideable">Reports</a>
+      <a href="#" class="hideable">Network</a>
+    </nav>
+    <div class="spacer"></div>
+    <span class="kbd hideable">Search <kbd>⌘</kbd><kbd>K</kbd></span>
+    <div class="acct">
+      <div class="avatar">MR</div>
+      <div><div class="name">Matthew Ratz</div><div class="role">Director</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ===================== DASHBOARD ===================== -->
+<main>
+  <div class="head">
+    <div>
+      <h1>Good evening, Matthew.</h1>
+      <div class="sub">Passion for Learning · 3 programs · 2 sites</div>
+    </div>
+    <div class="period">This month
+      <svg class="caret" viewBox="0 0 24 24" style="stroke:#0A0A0A"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+  </div>
+
+  <!-- stat cards -->
+  <section class="stats">
+    <div class="stat"><div class="v num">3</div><div class="l">Active programs</div></div>
+    <div class="stat"><div class="v num">38</div><div class="l">Students reached <span class="tk">✓</span></div></div>
+    <div class="stat"><div class="v num">24</div><div class="l">Sessions held <span class="tk">✓</span></div></div>
+    <div class="stat"><div class="v num">86%</div><div class="l">Attendance rate <span class="tk">✓</span></div></div>
+    <div class="stat"><div class="v num">4</div><div class="l">Forms outstanding</div></div>
+    <div class="stat"><div class="v num">2</div><div class="l">Profiles live <span class="tk">✓</span></div></div>
+  </section>
+
+  <!-- needs attention -->
+  <div class="section-label">Needs attention</div>
+  <section class="attn">
+    <div class="row">
+      <span class="dotw"><span class="mk">▸</span><b>Thursday Coding Club</b> — no attendance logged in 7 days</span>
+      <a class="act">Log attendance</a>
+    </div>
+    <div class="row">
+      <span class="dotw"><span class="mk">▸</span><b>Reading Stars</b> — 4 permission forms missing</span>
+      <a class="act">Open forms</a>
+    </div>
+    <div class="row">
+      <span class="dotw"><span class="mk">▸</span><b>Reading Stars</b> — public profile is 21 days stale</span>
+      <a class="act">Re-publish</a>
+    </div>
+  </section>
+
+  <!-- programs + activity -->
+  <div class="grid2">
+    <div>
+      <div class="section-label">Programs</div>
+      <section class="prog">
+        <div class="p">
+          <div class="meta">
+            <div class="nm">Reading Stars <span>Montgomery Blair HS</span></div>
+            <div class="facts">12 sessions · 86% attendance · forms 8/12 · <b>live v1</b></div>
+          </div>
+          <span class="dots">⋯</span>
+        </div>
+        <div class="p">
+          <div class="meta">
+            <div class="nm">Thursday Coding Club <span>Silver Spring Rec</span></div>
+            <div class="facts"><span class="warn">0 sessions</span> · — · forms — · not published</div>
+          </div>
+          <span class="dots">⋯</span>
+        </div>
+        <div class="p">
+          <div class="meta">
+            <div class="nm">Math Lab <span>Montgomery Blair HS</span></div>
+            <div class="facts">9 sessions · 91% attendance · forms 11/11 · live v3</div>
+          </div>
+          <span class="dots">⋯</span>
+        </div>
+      </section>
+    </div>
+    <div>
+      <div class="section-label">Recent activity</div>
+      <section class="feed">
+        <div class="e"><span class="dot pub"></span><div><div>Public profile published — <b>Reading Stars</b> (v1)</div><div class="t">Matthew Ratz · 2 hours ago</div></div></div>
+        <div class="e"><span class="dot"></span><div><div>Attendance logged — <b>Reading Stars</b>, May 26 · 10 students</div><div class="t">Matthew Ratz · 2 hours ago</div></div></div>
+        <div class="e"><span class="dot fac"></span><div><div>Facilitator added — <b>Fran Diallo</b></div><div class="t">Matthew Ratz · yesterday</div></div></div>
+        <div class="e"><span class="dot"></span><div><div>Attendance logged — <b>Reading Stars</b>, May 21 · 9 students</div><div class="t">Matthew Ratz · 4 days ago</div></div></div>
+        <div class="e"><span class="dot"></span><div><div>Attendance logged — <b>Math Lab</b>, May 20 · 11 students</div><div class="t">Matthew Ratz · 5 days ago</div></div></div>
+        <a class="more">View all activity →</a>
+      </section>
+    </div>
+  </div>
+</main>
+
+<p class="footnote">Mockup with sample data. In the product every figure marked ✓ derives from logged events (the verification chain); the rest are statuses. No participant names ever appear here.</p>
+
+<script>
+  // Tools mega-menu: click to toggle, click-away to close.
+  const btn = document.getElementById('toolsBtn');
+  const menu = document.getElementById('toolsMenu');
+  btn.addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
+  document.addEventListener('click', e => { if(!menu.contains(e.target)) menu.classList.remove('open'); });
+</script>
+</body>
+</html>

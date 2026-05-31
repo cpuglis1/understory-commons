@@ -116,3 +116,75 @@ attendance capture it points to; everything else is named and deferred.
 
 **Next action after approval:** `/clear`, switch to Sonnet, implement slice 1 against
 this plan. If slice 1 reveals the launchpad framing is wrong, stop and update this doc.
+
+---
+
+## Slice 1.5 — Director dashboard (supersedes the slice-1 launchpad home)
+
+**Date added:** 2026-05-31. **Why:** slice 1 shipped, and the launchpad framing
+*was* wrong — Chris's read was "it looks like an attendance app." The home is now
+redesigned as a front-facing **education-director command center**. Full design +
+locked aesthetic: `docs/design/2026-05-30-coordinator-dashboard.md`; approved static
+mockup: `docs/design/mockups/coordinator-dashboard.html`. This slice replaces the
+slice-1 home with that dashboard, wired to live data. The slice-1 guardrails
+(verification chain, PII-light, `programs_visible_to` scoping, append-only reads)
+are unchanged and re-tested here.
+
+**Deliverable a director could use:** Matt logs in and lands on a clean, mono-classy
+dashboard — org-level verified stat cards, a needs-attention triage queue, a programs
+grid, and a cross-tool activity feed — with a top-bar **Tools ▾ mega-menu** that
+presents the whole admin platform (attendance, forms, payroll, family comms, progress,
+funder/network). It reads as a platform, not an attendance app.
+
+### Scope
+
+**A. App shell (`templates/base.html`)** — rebuild as the mono-classy top bar:
+- Pinyon Script wordmark (Google Fonts) → home; nav: Dashboard, Programs, **Tools ▾**.
+- **Tools mega-menu**, six categories. Each sub-tool carries a `Live / Beta / Soon`
+  pill. **Honesty rule: only Live/Beta items are links; Soon items are muted,
+  non-interactive rows** (you can see the roadmap, you can't click into nothing).
+  - Live: Facilitators & invites → `accounts:facilitator_new`.
+  - Live (program-scoped, route via Programs list): Publish public profile, Public
+    program page.
+  - Beta: Log attendance → existing `attendance:attendance_log` stub (interim admin
+    path works).
+  - Soon (non-link): roster/history, participation trends, all Forms, timesheets,
+    payroll, all Family comms, all Program progress, grant-report sections, find
+    grants, exports.
+- Account chip: avatar (initials) + name + role, **static** (no sign-out this slice —
+  no login landing page exists yet to return to; logout deferred with that work).
+- Inter for UI; tabular-nums for figures; hairline borders; black primary buttons.
+
+**B. Dashboard home (`attendance:home`)** — all numbers from logged events:
+- **Stat cards** (period-scoped): Active programs (count), Students reached ✓,
+  Sessions held ✓, Attendance rate ✓ (present+late ÷ all records; `—` when no
+  records), Profiles live ✓ (programs with a current published snapshot). **Forms
+  outstanding → honest empty `—`** (no forms tool yet; not a fabricated number).
+- **Period selector** — functional: This week / This month (default) / All time, via
+  `?period=`. Drives every ✓ card and the programs grid.
+- **Needs attention** — real signals only: (1) no attendance in trailing 7 days →
+  links to its `attendance_log`; (2) published profile stale (>21 days) → links to
+  program detail / publish. Forms-missing item omitted (no source). Nothing when none.
+- **Programs grid** — per program: sessions (period), attendance rate, publish state;
+  `⋯` quick-action menu (links to that program's real actions). Forms column omitted.
+- **Recent activity** — reuse `attendance/launchpad.recent_activity` (attendance +
+  publish). Facilitator-added events omitted (User has no created timestamp).
+
+**C. New launchpad queries** (`attendance/launchpad.py`), all verified, no PII:
+- `org_stats(programs, start, end)` → dataclass: programs/students/sessions/
+  attendance_rate/profiles_live.
+- extend `program_cards` with period window + attendance-rate + stale-profile flag.
+
+**D. Tests** (`tests/test_coordinator_home.py`, rewritten for the dashboard):
+- dashboard requires auth; role scoping (coordinator org vs facilitator assigned).
+- stat cards reflect real counts; Attendance-rate shows `—` with no records; Forms
+  card shows `—` (honest empty); Profiles-live counts published snapshots.
+- period selector changes the window (constructed week-vs-month case yields different
+  sessions/students).
+- needs-attention surfaces stale attendance + stale profile; empty when none.
+- **no participant `display_name` anywhere on the dashboard** (PII probe).
+- Tools menu: Live items are links; a Soon item is present but not an anchor.
+
+### Explicitly NOT in slice 1.5
+The attendance-capture screen (still slice 2), any Soon tool's real functionality,
+search/⌘K, logout/login-landing, Reports/Network as top-level pages.
