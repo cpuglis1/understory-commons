@@ -26,7 +26,7 @@ def magic_login(request: HttpRequest, token: str) -> HttpResponse:
         return HttpResponse("Link not found.", status=404, content_type="text/plain")
 
     login(request, magic_token.user, backend="accounts.backends.MagicLinkBackend")
-    return redirect("/")
+    return redirect("attendance:home")
 
 
 @coordinator_required

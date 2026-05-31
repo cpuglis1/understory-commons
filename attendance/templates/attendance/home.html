@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Understory Commons{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.7rem;font-weight:700;letter-spacing:-.02em}
+  .lead{color:var(--muted);font-size:.92rem;margin-top:4px}
+
+  /* period selector (native <details>, no JS) */
+  details.period{position:relative}
+  details.period summary{list-style:none;display:inline-flex;align-items:center;gap:8px;
+    border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;
+    font-size:.84rem;font-weight:500;cursor:pointer}
+  details.period summary::-webkit-details-marker{display:none}
+  .period-menu{position:absolute;right:0;top:42px;background:#fff;border:1px solid var(--line);
+    border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.10);padding:6px;min-width:160px;z-index:20}
+  .period-menu a{display:block;padding:8px 10px;border-radius:7px;font-size:.85rem;color:#27272A}
+  .period-menu a:hover{background:#FAFAFA}
+  .period-menu a.on{font-weight:600;color:var(--ink)}
+
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-top:24px}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;background:#fff}
+  .stat .v{font-size:2.1rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+  .stat .l{font-size:.74rem;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:5px}
+  .stat .l .tk{color:#16A34A;font-weight:800}
+  .stat.empty .v{color:#D4D4D8}
+
+  .section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    font-weight:700;margin:30px 0 12px}
+
+  .attn{border:1px solid #FDE68A;background:#FFFBEB;border-radius:12px;overflow:hidden}
+  .attn .row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:12px 16px;border-top:1px solid #FBEFC6;font-size:.9rem}
+  .attn .row:first-child{border-top:0}
+  .attn .row .mk{color:#92400E;margin-right:8px}
+  .attn .act{font-size:.78rem;font-weight:600;color:var(--ink);border:1px solid #E7D7A8;
+    background:#fff;border-radius:8px;padding:5px 11px;white-space:nowrap}
+  .attn .act:hover{background:#fff8e6}
+
+  .grid2{display:grid;grid-template-columns:1.7fr 1fr;gap:24px}
+  .prog{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .prog .p{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:15px 16px;border-top:1px solid var(--line)}
+  .prog .p:first-child{border-top:0}
+  .prog .nm{font-weight:600;font-size:.95rem}
+  .prog .nm span{color:var(--muted);font-weight:400;margin-left:8px;font-size:.85rem}
+  .prog .facts{color:#52525B;font-size:.82rem;margin-top:3px}
+  .prog .facts .warn{color:#92400E;font-weight:600}
+  .prog .facts b{font-weight:600;color:#27272A}
+  .dots{color:#A1A1AA;font-size:1.2rem;letter-spacing:1px;padding:0 4px}
+  .prog .empty-row{padding:18px 16px;color:var(--muted);font-size:.9rem}
+
+  .feed{border:1px solid var(--line);border-radius:12px;background:#fff;padding:4px 16px}
+  .feed .e{display:flex;gap:10px;padding:13px 0;border-top:1px solid #F4F4F5;font-size:.86rem}
+  .feed .e:first-child{border-top:0}
+  .feed .dot{flex:none;width:8px;height:8px;border-radius:50%;margin-top:6px;background:#0A0A0A}
+  .feed .dot.publish{background:#2563EB}
+  .feed .e .t{color:var(--muted);font-size:.76rem;margin-top:2px}
+  .feed .empty-row{padding:16px 0;color:var(--muted);font-size:.88rem}
+
+  @media(max-width:900px){ .stats{grid-template-columns:repeat(3,1fr)} .grid2{grid-template-columns:1fr} }
+  @media(max-width:560px){ .stats{grid-template-columns:repeat(2,1fr)} }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Welcome back, {{ request.user.display_name }}.</h1>
+    <div class="lead">{{ request.user.organization.name }} · {{ cards|length }} program{{ cards|length|pluralize }}</div>
+  </div>
+  <details class="period">
+    <summary>{{ period.label }}
+      <svg class="caret" viewBox="0 0 24 24" style="stroke:#0A0A0A"><path d="M6 9l6 6 6-6"/></svg>
+    </summary>
+    <div class="period-menu">
+      <a href="?period=week" class="{% if period.key == 'week' %}on{% endif %}">This week</a>
+      <a href="?period=month" class="{% if period.key == 'month' %}on{% endif %}">This month</a>
+      <a href="?period=all" class="{% if period.key == 'all' %}on{% endif %}">All time</a>
+    </div>
+  </details>
+</div>
+
+<!-- stat cards -->
+<section class="stats">
+  <div class="stat"><div class="v num">{{ stats.active_programs }}</div><div class="l">Active programs</div></div>
+  <div class="stat"><div class="v num">{{ stats.students_reached }}</div><div class="l">Students reached <span class="tk">✓</span></div></div>
+  <div class="stat"><div class="v num">{{ stats.sessions_held }}</div><div class="l">Sessions held <span class="tk">✓</span></div></div>
+  <div class="stat{% if stats.attendance_rate is None %} empty{% endif %}">
+    <div class="v num">{% if stats.attendance_rate is not None %}{% widthratio stats.attendance_rate 1 100 %}%{% else %}—{% endif %}</div>
+    <div class="l">Attendance rate <span class="tk">✓</span></div>
+  </div>
+  <div class="stat empty"><div class="v num">—</div><div class="l">Forms outstanding</div></div>
+  <div class="stat"><div class="v num">{{ stats.profiles_live }}</div><div class="l">Profiles live <span class="tk">✓</span></div></div>
+</section>
+
+<!-- needs attention -->
+{% if attention %}
+<div class="section-label">Needs attention</div>
+<section class="attn">
+  {% for item in attention %}
+  <div class="row">
+    <span><span class="mk">▸</span><strong>{{ item.program.name }}</strong> — {{ item.detail }}</span>
+    <a class="act" href="{{ item.url }}">{{ item.action }}</a>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- programs + activity -->
+<div class="grid2">
+  <div>
+    <div class="section-label">Programs</div>
+    <section class="prog">
+      {% for card in cards %}
+      <div class="p">
+        <div>
+          <div class="nm"><a href="{% url 'attendance:program_detail' card.program.slug %}">{{ card.program.name }}</a>{% if card.program.site_label %}<span>{{ card.program.site_label }}</span>{% endif %}</div>
+          <div class="facts">
+            {% if card.sessions %}{{ card.sessions }} session{{ card.sessions|pluralize }}{% else %}<span class="warn">0 sessions</span>{% endif %}
+            · {% if card.attendance_rate is not None %}{% widthratio card.attendance_rate 1 100 %}% attendance{% else %}—{% endif %}
+            · {% if card.published %}<b>live v{{ card.published.version }}</b>{% else %}not published{% endif %}
+          </div>
+        </div>
+        <a class="dots" href="{% url 'attendance:program_detail' card.program.slug %}" title="Open program">⋯</a>
+      </div>
+      {% empty %}
+      <div class="empty-row">
+        No programs yet.
+        {% if request.user.role == "coordinator" %}<a href="{% url 'attendance:program_new' %}">Create your first program</a>.{% else %}Ask your coordinator to assign you to one.{% endif %}
+      </div>
+      {% endfor %}
+    </section>
+  </div>
+  <div>
+    <div class="section-label">Recent activity</div>
+    <section class="feed">
+      {% for item in activity %}
+      <div class="e">
+        <span class="dot {{ item.kind }}"></span>
+        <div>
+          <div><strong>{{ item.program_name }}</strong> — {{ item.detail }}</div>
+          <div class="t">{{ item.actor_name }} · {{ item.when|date:"N j, g:i a" }}</div>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-row">No activity logged yet. It'll appear here as you record attendance and publish profiles.</div>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+{% endblock %}
