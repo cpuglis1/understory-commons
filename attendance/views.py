@@ -1,152 +1,153 @@
-import calendar
-import datetime
+import uuid
 
-from django.http import HttpResponseForbidden
+from django.contrib import messages
+from django.db import IntegrityError, transaction
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
-from django.utils import timezone
 
-from accounts.decorators import coordinator_required, facilitator_or_coordinator_required
+from accounts.decorators import facilitator_or_coordinator_required
+from core.models import Session
 from core.queries import programs_visible_to
-from core.services.snapshots import build_draft, current_published, preview_payload, publish
 
-from . import launchpad
-from .forms import ProgramCreateForm
+from .forms import ParticipantForm, SessionForm
+from .models import AttendanceRecord, Participant
+from .queries import latest_status_by_participant, program_month_stats, session_headcount
 
-
-def _current_month() -> tuple[datetime.date, datetime.date]:
-    today = datetime.date.today()
-    start = today.replace(day=1)
-    last_day = calendar.monthrange(today.year, today.month)[1]
-    end = today.replace(day=last_day)
-    return start, end
+VALID_STATUSES = {choice for choice, _ in AttendanceRecord.STATUS_CHOICES}
 
 
-@facilitator_or_coordinator_required
-def home(request):
-    """The director dashboard (command center).
+def _visible_session(request, pk) -> Session:
+    """Fetch a session whose program the user may see, else 404."""
+    return get_object_or_404(
+        Session.objects.select_related("program", "program__organization"),
+        pk=pk,
+        program__in=programs_visible_to(request.user),
+    )
 
-    Reports on the whole org the user may see (role-scoped): verified stat cards
-    for the selected period, a needs-attention triage queue, a programs grid, and
-    a cross-tool activity feed. Every number traces to a logged event; no
-    participant identities appear here.
-    """
-    programs = list(programs_visible_to(request.user).filter(is_archived=False).order_by("name"))
-    period = launchpad.resolve_period(request.GET.get("period"))
-    cards = launchpad.program_cards(programs, period)
 
-    attention: list[dict] = []
-    for card in cards:
-        if card.attendance_stale:
-            attention.append(
-                {
-                    "program": card.program,
-                    "detail": "no attendance logged in the last 7 days",
-                    "url": reverse("attendance:attendance_log", args=[card.program.slug]),
-                    "action": "Log attendance",
-                }
-            )
-    for card in cards:
-        if card.profile_stale:
-            days = (timezone.now() - card.published.published_at).days
-            attention.append(
-                {
-                    "program": card.program,
-                    "detail": f"public profile is {days} days stale",
-                    "url": reverse("attendance:program_detail", args=[card.program.slug]),
-                    "action": "Re-publish",
-                }
-            )
-
-    return render(
-        request,
-        "attendance/home.html",
-        {
-            "period": period,
-            "stats": launchpad.org_stats(programs, period),
-            "cards": cards,
-            "attention": attention,
-            "activity": launchpad.recent_activity(programs),
-        },
+def _active_participants(organization):
+    return Participant.objects.filter(organization=organization, merged_into__isnull=True).order_by(
+        "display_name"
     )
 
 
 @facilitator_or_coordinator_required
-def attendance_log(request, slug: str):
-    """Stub destination for the home's "Log attendance" CTA.
-
-    The real capture screen is slice 2. This page exists so the launchpad's
-    primary action is never a dead end: it names what is coming and points to
-    the interim path (Django admin) for anyone who must log attendance today.
-    """
-    program = get_object_or_404(
-        programs_visible_to(request.user).filter(is_archived=False), slug=slug
-    )
-    return render(request, "attendance/attendance_log.html", {"program": program})
+def dashboard(request: HttpRequest) -> HttpResponse:
+    programs = list(programs_visible_to(request.user).filter(is_archived=False))
+    cards = [{"program": p, "stats": program_month_stats(p)} for p in programs]
+    return render(request, "attendance/dashboard.html", {"cards": cards})
 
 
 @facilitator_or_coordinator_required
-def program_list(request):
-    programs = programs_visible_to(request.user).filter(is_archived=False).order_by("name")
-    return render(request, "attendance/program_list.html", {"programs": programs})
+def program_detail(request: HttpRequest, pk) -> HttpResponse:
+    program = get_object_or_404(programs_visible_to(request.user), pk=pk)
 
-
-@coordinator_required
-def program_new(request):
     if request.method == "POST":
-        form = ProgramCreateForm(request.POST)
+        form = SessionForm(request.POST)
         if form.is_valid():
-            program = form.save(commit=False)
-            program.organization = request.user.organization
-            program.coordinator = request.user
-            program.save()
-            return redirect("attendance:program_detail", slug=program.slug)
+            session = form.save(commit=False)
+            session.program = program
+            try:
+                with transaction.atomic():
+                    session.save()
+            except IntegrityError:
+                form.add_error(
+                    "scheduled_date", "A session already exists for this program on that date."
+                )
+            else:
+                messages.success(request, "Session created.")
+                return redirect("attendance:session_detail", pk=session.pk)
     else:
-        form = ProgramCreateForm()
-    return render(request, "attendance/program_new.html", {"form": form})
+        form = SessionForm()
 
-
-@facilitator_or_coordinator_required
-def program_detail(request, slug: str):
-    program = get_object_or_404(
-        programs_visible_to(request.user).filter(is_archived=False), slug=slug
-    )
-    published = current_published(program)
-    coverage_start, coverage_end = _current_month()
+    sessions = [
+        {"session": s, "headcount": session_headcount(s)}
+        for s in program.sessions.order_by("-scheduled_date")
+    ]
     return render(
         request,
         "attendance/program_detail.html",
         {
             "program": program,
-            "published": published,
-            "coverage_start": coverage_start,
-            "coverage_end": coverage_end,
+            "form": form,
+            "sessions": sessions,
+            "stats": program_month_stats(program),
         },
     )
 
 
 @facilitator_or_coordinator_required
-def program_preview(request, slug: str):
-    program = get_object_or_404(
-        programs_visible_to(request.user).filter(is_archived=False), slug=slug
-    )
-    coverage_start, coverage_end = _current_month()
-    payload = preview_payload(program, coverage_start, coverage_end)
+def session_detail(request: HttpRequest, pk) -> HttpResponse:
+    session = _visible_session(request, pk)
+    org = session.program.organization
+    latest = latest_status_by_participant(session)
+    participants = [
+        {"participant": p, "status": latest.get(p.id, "")} for p in _active_participants(org)
+    ]
     return render(
         request,
-        "discovery/program_detail.html",
-        {"payload": payload, "is_preview": True},
+        "attendance/session_detail.html",
+        {
+            "session": session,
+            "participants": participants,
+            "status_choices": AttendanceRecord.STATUS_CHOICES,
+            "headcount": session_headcount(session),
+            "participant_form": ParticipantForm(),
+            "idempotency_key": uuid.uuid4().hex,
+        },
     )
 
 
-@coordinator_required
-def program_publish(request, slug: str):
+@facilitator_or_coordinator_required
+def record_attendance(request: HttpRequest, pk) -> HttpResponse:
     if request.method != "POST":
-        return HttpResponseForbidden("POST required.")
-    program = get_object_or_404(
-        programs_visible_to(request.user).filter(is_archived=False), slug=slug
-    )
-    coverage_start, coverage_end = _current_month()
-    draft = build_draft(program, coverage_start, coverage_end)
-    publish(draft, request.user)
-    return redirect("attendance:program_detail", slug=slug)
+        return redirect("attendance:session_detail", pk=pk)
+
+    session = _visible_session(request, pk)
+    org = session.program.organization
+    key = request.POST.get("idempotency_key", "")
+
+    # Idempotency: a re-submit (back/refresh) with the same key writes nothing.
+    if (
+        key
+        and AttendanceRecord.objects.filter(
+            session=session, submission_idempotency_key=key
+        ).exists()
+    ):
+        messages.info(request, "Attendance already saved.")
+        return redirect("attendance:session_detail", pk=session.pk)
+
+    latest = latest_status_by_participant(session)
+    written = 0
+    for participant in _active_participants(org):
+        status = request.POST.get(f"status_{participant.id}", "")
+        if status not in VALID_STATUSES:
+            continue
+        # Only append when the status is new or changed — keeps the log meaningful.
+        if latest.get(participant.id) == status:
+            continue
+        AttendanceRecord.objects.create(
+            session=session,
+            participant=participant,
+            status=status,
+            recorded_by=request.user,
+            source=AttendanceRecord.MANUAL_FORM,
+            submission_idempotency_key=key,
+        )
+        written += 1
+
+    messages.success(request, f"Recorded attendance for {written} participant(s).")
+    return redirect("attendance:session_detail", pk=session.pk)
+
+
+@facilitator_or_coordinator_required
+def participant_create(request: HttpRequest, pk) -> HttpResponse:
+    session = _visible_session(request, pk)
+    if request.method == "POST":
+        form = ParticipantForm(request.POST)
+        if form.is_valid():
+            participant = form.save(commit=False)
+            participant.organization = session.program.organization
+            participant.save()
+            messages.success(request, f"Added {participant.display_name}.")
+    return redirect("attendance:session_detail", pk=session.pk)

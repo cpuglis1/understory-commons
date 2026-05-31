@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ session.scheduled_date }} — {{ session.program.name }}{% endblock %}
+{% block content %}
+<div class="crumbs">
+  <a href="{% url 'attendance:dashboard' %}">Programs</a> &rsaquo;
+  <a href="{% url 'attendance:program_detail' session.program.pk %}">{{ session.program.name }}</a> &rsaquo;
+  {{ session.scheduled_date }}
+</div>
+<h1>Session — {{ session.scheduled_date }}</h1>
+<p class="muted">{{ session.program.name }} · <span class="pill present">{{ headcount }} present</span></p>
+{% if session.notes %}<div class="card">{{ session.notes|linebreaksbr }}</div>{% endif %}
+
+<h2>Attendance</h2>
+{% if participants %}
+  <form method="post" action="{% url 'attendance:record_attendance' session.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+    <table>
+      <thead><tr><th>Participant</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for row in participants %}
+          <tr>
+            <td>{{ row.participant.display_name }}</td>
+            <td>
+              <select name="status_{{ row.participant.id }}">
+                <option value="">—</option>
+                {% for value, label in status_choices %}
+                  <option value="{{ value }}" {% if row.status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p style="margin-top:1rem"><button type="submit">Save attendance</button></p>
+  </form>
+{% else %}
+  <div class="card empty">No participants yet — add one below.</div>
+{% endif %}
+
+<div class="card">
+  <h3 style="margin-top:0">Add a participant</h3>
+  <form method="post" action="{% url 'attendance:participant_create' session.pk %}">
+    {% csrf_token %}
+    {{ participant_form.as_p }}
+    <button type="submit" class="secondary">Add participant</button>
+  </form>
+</div>
+{% endblock %}
