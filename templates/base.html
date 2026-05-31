@@ -5,35 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Understory Commons{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Pinyon+Script&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #fafaf9; color: #1c1917; line-height: 1.55; }
-    a { color: #15803d; }
-    .topbar { background: #fff; border-bottom: 1px solid #e7e5e4; }
-    .topbar-inner { max-width: 880px; margin: 0 auto; padding: 0.75rem 1rem;
-                    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-    .wordmark { font-size: 0.875rem; font-weight: 700; text-transform: uppercase;
-                letter-spacing: 0.05em; color: #1c1917; text-decoration: none; }
-    .topbar nav { display: flex; gap: 1rem; font-size: 0.9rem; }
-    .topbar nav a { color: #57534e; text-decoration: none; }
-    .topbar nav a:hover { color: #15803d; }
-    .topbar .who { margin-left: auto; font-size: 0.8rem; color: #78716c; text-align: right; }
-    .role-badge { display: inline-block; font-size: 0.7rem; text-transform: uppercase;
-                  letter-spacing: 0.04em; color: #78716c; background: #f5f5f4;
-                  border: 1px solid #e7e5e4; border-radius: 4px; padding: 0.05rem 0.4rem;
-                  margin-left: 0.35rem; }
-    .container { max-width: 880px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
-    h2 { font-size: 1.05rem; font-weight: 600; margin: 1.75rem 0 0.75rem; }
-    .btn { display: inline-block; background: #15803d; color: #fff; text-decoration: none;
-           font-size: 0.9rem; font-weight: 600; border: 0; border-radius: 6px;
-           padding: 0.5rem 0.9rem; cursor: pointer; }
-    .btn:hover { background: #166534; }
-    .btn-secondary { background: #fff; color: #1c1917; border: 1px solid #d6d3d1; }
-    .btn-secondary:hover { background: #f5f5f4; }
-    .muted { color: #78716c; }
-    @media (max-width: 480px) {
-      .topbar .who { margin-left: 0; width: 100%; text-align: left; }
+    :root{
+      --ink:#0A0A0A; --muted:#6B7280; --line:#EAEAEA; --surface:#FFFFFF;
+      --pill-live-bg:#F0FDF4; --pill-live-fg:#15803D; --pill-live-bd:#BBF7D0;
+      --pill-beta-bg:#FFFBEB; --pill-beta-fg:#B45309; --pill-beta-bd:#FDE68A;
+      --pill-soon-bg:#F4F4F5; --pill-soon-fg:#71717A; --pill-soon-bd:#E4E4E7;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Inter,system-ui,sans-serif;background:var(--surface);color:var(--ink);
+         -webkit-font-smoothing:antialiased;line-height:1.5}
+    a{color:inherit;text-decoration:none}
+    .num{font-variant-numeric:tabular-nums}
+    .muted{color:var(--muted)}
+
+    /* shared button utilities (used by program pages) */
+    .btn{display:inline-block;background:var(--ink);color:#fff;text-decoration:none;
+         font-size:.875rem;font-weight:600;border:0;border-radius:8px;padding:.5rem .9rem;cursor:pointer}
+    .btn:hover{background:#27272A}
+    .btn-secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
+    .btn-secondary:hover{background:#FAFAFA}
+
+    /* ---------- top bar ---------- */
+    .topbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.85);
+      backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--line)}
+    .topbar-inner{max-width:1100px;margin:0 auto;height:60px;display:flex;align-items:center;
+      gap:26px;padding:0 24px}
+    .wordmark{font-family:'Pinyon Script',cursive;font-size:1.85rem;line-height:1;
+      color:var(--ink);white-space:nowrap;padding-top:6px}
+    .nav{display:flex;align-items:center;gap:22px;font-size:.875rem;font-weight:500}
+    .nav a,.nav button{color:#52525B;background:none;border:0;font:inherit;cursor:pointer;
+      display:inline-flex;align-items:center;gap:4px}
+    .nav a:hover,.nav button:hover{color:var(--ink)}
+    .nav a.active{color:var(--ink);font-weight:600}
+    .caret{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+    .spacer{flex:1}
+    .acct{display:inline-flex;align-items:center;gap:8px}
+    .avatar{width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;
+      font-size:.72rem;font-weight:700;display:grid;place-items:center}
+    .acct .name{font-size:.84rem;font-weight:500}
+    .acct .role{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+
+    /* ---------- tools mega-menu ---------- */
+    .mega-wrap{position:relative}
+    .mega{position:absolute;top:34px;left:-12px;width:760px;background:#fff;border:1px solid var(--line);
+      border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.10);padding:22px 24px;
+      display:none;grid-template-columns:repeat(3,1fr);gap:22px 28px}
+    .mega.open{display:grid}
+    .mega .cat{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+      font-weight:700;margin-bottom:10px}
+    .mega ul{list-style:none}
+    .mega li{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:6px 8px;margin:0 -8px;border-radius:8px;font-size:.86rem;font-weight:500;color:#27272A}
+    .mega li.soon{color:#A1A1AA;cursor:default}
+    .mega li:not(.soon):hover{background:#FAFAFA;color:var(--ink)}
+    .mega li a{flex:1}
+    .mega .foot{grid-column:1/-1;border-top:1px solid var(--line);margin-top:4px;padding-top:12px;
+      font-size:.74rem;color:var(--muted);display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+    .pill{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+      padding:2px 7px;border-radius:999px;border:1px solid;white-space:nowrap}
+    .pill.live{background:var(--pill-live-bg);color:var(--pill-live-fg);border-color:var(--pill-live-bd)}
+    .pill.beta{background:var(--pill-beta-bg);color:var(--pill-beta-fg);border-color:var(--pill-beta-bd)}
+    .pill.soon{background:var(--pill-soon-bg);color:var(--pill-soon-fg);border-color:var(--pill-soon-bd)}
+
+    /* ---------- content ---------- */
+    .container{max-width:1100px;margin:0 auto;padding:34px 24px 80px}
+
+    @media(max-width:760px){
+      .nav .hideable{display:none}
+      .mega{width:92vw;left:0;grid-template-columns:repeat(2,1fr)}
+      .acct .name,.acct .role{display:none}
     }
   </style>
   {% block extra_head %}{% endblock %}
@@ -43,19 +87,94 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="wordmark" href="{% url 'attendance:home' %}">Understory Commons</a>
-      <nav>
-        <a href="{% url 'attendance:home' %}">Home</a>
-        <a href="{% url 'attendance:program_list' %}">Programs</a>
+      <nav class="nav">
+        <a href="{% url 'attendance:home' %}" class="{% block nav_dashboard %}{% endblock %}">Dashboard</a>
+        <a href="{% url 'attendance:program_list' %}" class="hideable">Programs</a>
+        <div class="mega-wrap hideable">
+          <button id="toolsBtn" aria-haspopup="true">Tools
+            <svg class="caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="mega" id="toolsMenu">
+            <div>
+              <div class="cat">Attendance &amp; Participation</div>
+              <ul>
+                <li><a href="{% url 'attendance:program_list' %}">Log attendance</a> <span class="pill beta">Beta</span></li>
+                <li class="soon">Roster &amp; history <span class="pill soon">Soon</span></li>
+                <li class="soon">Participation trends <span class="pill soon">Soon</span></li>
+              </ul>
+            </div>
+            <div>
+              <div class="cat">Forms &amp; Permissions</div>
+              <ul>
+                <li class="soon">Permission forms <span class="pill soon">Soon</span></li>
+                <li class="soon">Media / photo consent <span class="pill soon">Soon</span></li>
+                <li class="soon">Form status by program <span class="pill soon">Soon</span></li>
+              </ul>
+            </div>
+            <div>
+              <div class="cat">Staff &amp; Payroll</div>
+              <ul>
+                <li><a href="{% url 'accounts:facilitator_new' %}">Facilitators &amp; invites</a> <span class="pill live">Live</span></li>
+                <li class="soon">Timesheets <span class="pill soon">Soon</span></li>
+                <li class="soon">Monthly payroll prep <span class="pill soon">Soon</span></li>
+              </ul>
+            </div>
+            <div>
+              <div class="cat">Family Communication</div>
+              <ul>
+                <li class="soon">Weekly update draft <span class="pill soon">Soon</span></li>
+                <li class="soon">Announcement draft <span class="pill soon">Soon</span></li>
+                <li class="soon">Generation only — you send <span class="pill soon">Soon</span></li>
+              </ul>
+            </div>
+            <div>
+              <div class="cat">Program Progress</div>
+              <ul>
+                <li class="soon">Project milestones <span class="pill soon">Soon</span></li>
+                <li class="soon">Photo &amp; testimonial intake <span class="pill soon">Soon</span></li>
+                <li class="soon">Satisfaction survey <span class="pill soon">Soon</span></li>
+              </ul>
+            </div>
+            <div>
+              <div class="cat">Funder &amp; Network</div>
+              <ul>
+                <li><a href="{% url 'attendance:program_list' %}">Publish public profile</a> <span class="pill live">Live</span></li>
+                <li><a href="{% url 'attendance:program_list' %}">Public program page</a> <span class="pill live">Live</span></li>
+                <li class="soon">Grant-report sections <span class="pill soon">Soon</span></li>
+                <li class="soon">Find grants (DMV youth-ed) <span class="pill soon">Soon</span></li>
+                <li class="soon">Export CSV / PDF <span class="pill soon">Soon</span></li>
+              </ul>
+            </div>
+            <div class="foot">
+              <span><span class="pill live">Live</span> working today</span>
+              <span><span class="pill beta">Beta</span> interim path</span>
+              <span><span class="pill soon">Soon</span> on the roadmap</span>
+            </div>
+          </div>
+        </div>
       </nav>
-      <span class="who">
-        {{ request.user.display_name }}
-        <span class="role-badge">{{ request.user.get_role_display }}</span>
-      </span>
+      <div class="spacer"></div>
+      <div class="acct">
+        <div class="avatar">{{ request.user.display_name|slice:":1"|upper }}</div>
+        <div>
+          <div class="name">{{ request.user.display_name }}</div>
+          <div class="role">{{ request.user.get_role_display }}</div>
+        </div>
+      </div>
     </div>
   </header>
   {% endif %}
   <div class="container">
     {% block content %}{% endblock %}
   </div>
+  <script>
+    (function(){
+      var btn = document.getElementById('toolsBtn');
+      var menu = document.getElementById('toolsMenu');
+      if(!btn) return;
+      btn.addEventListener('click', function(e){ e.stopPropagation(); menu.classList.toggle('open'); });
+      document.addEventListener('click', function(e){ if(!menu.contains(e.target)) menu.classList.remove('open'); });
+    })();
+  </script>
 </body>
 </html>

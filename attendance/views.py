@@ -3,6 +3,8 @@ import datetime
 
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
 
 from accounts.decorators import coordinator_required, facilitator_or_coordinator_required
 from core.queries import programs_visible_to
@@ -22,21 +24,49 @@ def _current_month() -> tuple[datetime.date, datetime.date]:
 
 @facilitator_or_coordinator_required
 def home(request):
-    """The coordinator launchpad: route into the work in one tap.
+    """The director dashboard (command center).
 
-    Shows every program the user may see (role-scoped), each with a primary
-    "Log attendance" CTA; a recent-activity strip of real logged events; and a
-    needs-attention list of programs whose attendance has lapsed.
+    Reports on the whole org the user may see (role-scoped): verified stat cards
+    for the selected period, a needs-attention triage queue, a programs grid, and
+    a cross-tool activity feed. Every number traces to a logged event; no
+    participant identities appear here.
     """
     programs = list(programs_visible_to(request.user).filter(is_archived=False).order_by("name"))
-    cards = launchpad.program_cards(programs)
+    period = launchpad.resolve_period(request.GET.get("period"))
+    cards = launchpad.program_cards(programs, period)
+
+    attention: list[dict] = []
+    for card in cards:
+        if card.attendance_stale:
+            attention.append(
+                {
+                    "program": card.program,
+                    "detail": "no attendance logged in the last 7 days",
+                    "url": reverse("attendance:attendance_log", args=[card.program.slug]),
+                    "action": "Log attendance",
+                }
+            )
+    for card in cards:
+        if card.profile_stale:
+            days = (timezone.now() - card.published.published_at).days
+            attention.append(
+                {
+                    "program": card.program,
+                    "detail": f"public profile is {days} days stale",
+                    "url": reverse("attendance:program_detail", args=[card.program.slug]),
+                    "action": "Re-publish",
+                }
+            )
+
     return render(
         request,
         "attendance/home.html",
         {
+            "period": period,
+            "stats": launchpad.org_stats(programs, period),
             "cards": cards,
+            "attention": attention,
             "activity": launchpad.recent_activity(programs),
-            "needs_attention": [card for card in cards if card.needs_attention],
         },
     )
 
