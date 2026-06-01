@@ -63,7 +63,10 @@ WSGI_APPLICATION = "understory_commons.wsgi.application"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+# Eastern: every pilot CBO is DMV, and the session guide's day boundaries
+# ("today's session", the 11:59pm Midnight Rule auto-close) must be local, not UTC.
+# Per-org timezones are deferred until a non-Eastern CBO onboards (session-guide ADR, D8).
+TIME_ZONE = "America/New_York"
 USE_I18N = True
 USE_TZ = True
 

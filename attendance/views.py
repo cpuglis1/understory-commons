@@ -1,5 +1,6 @@
 import calendar
 import datetime
+import uuid
 from decimal import Decimal
 
 from django.contrib import messages
@@ -9,11 +10,18 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.decorators import coordinator_required, facilitator_or_coordinator_required
+from core.models import Session
 from core.queries import programs_visible_to
 from core.services.snapshots import build_draft, current_published, preview_payload, publish
 
 from . import launchpad
-from .forms import ProgramCreateForm, ProgramSetupForm
+from .forms import ProgramCreateForm, ProgramSetupForm, SessionWrapForm
+from .models import AttendanceRecord, Enrollment, Participant
+from .queries import enrollment_states, latest_status_by_participant
+
+# V1 statuses surfaced in the session guide — present / absent only (the model also
+# carries late/excused; they're not offered until a CBO asks).
+_GUIDE_STATUSES = {AttendanceRecord.PRESENT, AttendanceRecord.ABSENT}
 
 
 def _current_month() -> tuple[datetime.date, datetime.date]:
@@ -73,18 +81,156 @@ def home(request):
     )
 
 
+def _visible_program(request, slug: str):
+    return get_object_or_404(programs_visible_to(request.user).filter(is_archived=False), slug=slug)
+
+
+def _todays_session(program) -> Session:
+    """Resolve today's session, creating it on first open. Idempotent: the
+    unique (program, scheduled_date) constraint means re-opening never duplicates."""
+    session, _ = Session.objects.get_or_create(program=program, scheduled_date=timezone.localdate())
+    return session
+
+
 @facilitator_or_coordinator_required
 def attendance_log(request, slug: str):
-    """Stub destination for the home's "Log attendance" CTA.
+    """The session guide, step 1: open today's session and take attendance (tap-first).
 
-    The real capture screen is slice 2. This page exists so the launchpad's
-    primary action is never a dead end: it names what is coming and points to
-    the interim path (Django admin) for anyone who must log attendance today.
+    GET renders the roster — active above the Inactive (ghosting) divider, all tappable.
+    POST commits attendance append-only and idempotently (a record is written only when a
+    participant's status is new or changed; the per-render key no-ops a re-submit), then
+    advances to the wrap screen. V1 statuses are present/absent only.
     """
-    program = get_object_or_404(
-        programs_visible_to(request.user).filter(is_archived=False), slug=slug
+    program = _visible_program(request, slug)
+    session = _todays_session(program)
+
+    if request.method == "POST":
+        _commit_attendance(request, program, session)
+        return redirect("attendance:session_wrap", slug=program.slug)
+
+    active, inactive = enrollment_states(program)
+    latest = latest_status_by_participant(session)
+
+    def _chip(participant):
+        return {
+            "participant": participant,
+            # neutral (absent) until the human acts; a re-opened session shows saved state
+            "present": latest.get(participant.id) == AttendanceRecord.PRESENT,
+        }
+
+    return render(
+        request,
+        "attendance/session_guide.html",
+        {
+            "program": program,
+            "session": session,
+            "active": [_chip(p) for p in active],
+            "inactive": [_chip(p) for p in inactive],
+            "idempotency_key": uuid.uuid4().hex,
+        },
     )
-    return render(request, "attendance/attendance_log.html", {"program": program})
+
+
+def _commit_attendance(request, program, session) -> None:
+    """Append present/absent records for changed statuses only (adapts da53963)."""
+    key = request.POST.get("idempotency_key", "")
+    if (
+        key
+        and AttendanceRecord.objects.filter(
+            session=session, submission_idempotency_key=key
+        ).exists()
+    ):
+        return  # a re-POST (double-tap / refresh / back) writes nothing
+
+    latest = latest_status_by_participant(session)
+    enrolled = Participant.objects.filter(
+        enrollments__program=program, merged_into__isnull=True
+    ).distinct()
+    for participant in enrolled:
+        status = request.POST.get(f"status_{participant.id}", "")
+        if status not in _GUIDE_STATUSES:
+            continue
+        if latest.get(participant.id) == status:
+            continue  # unchanged → no new record (keeps the append-only log meaningful)
+        AttendanceRecord.objects.create(
+            session=session,
+            participant=participant,
+            status=status,
+            recorded_by=request.user,  # the attestation, decoupled from pay attribution
+            source=AttendanceRecord.MANUAL_FORM,
+            submission_idempotency_key=key,
+        )
+
+
+@facilitator_or_coordinator_required
+def session_add_participant(request, slug: str):
+    """+ Add someone: enroll a new first-name participant mid-session (PII: name only)."""
+    program = _visible_program(request, slug)
+    if request.method == "POST":
+        name = request.POST.get("display_name", "").strip()
+        if name:
+            org = program.organization
+            participant = Participant.objects.filter(
+                organization=org, merged_into__isnull=True, display_name__iexact=name
+            ).first() or Participant.objects.create(organization=org, display_name=name)
+            Enrollment.objects.get_or_create(program=program, participant=participant)
+    return redirect("attendance:attendance_log", slug=program.slug)
+
+
+@facilitator_or_coordinator_required
+def session_wrap(request, slug: str):
+    """The session guide, step 2: the free-text note + Facilitator of Record → Save & close.
+
+    Closing commits ``closed_at`` + the program's default duration (the pay length) and
+    stamps the FoR. Idempotent: a re-POST overwrites the same note/FoR and never re-closes
+    an already-closed session (no double duration, no clobbered timestamp).
+    """
+    program = _visible_program(request, slug)
+    session = _todays_session(program)
+
+    if request.method == "POST":
+        form = SessionWrapForm(request.POST, program=program)
+        if form.is_valid():
+            session.notes = form.cleaned_data["note"]
+            session.facilitator_of_record = form.cleaned_data["facilitator_of_record"]
+            if session.closed_at is None:
+                session.closed_at = timezone.now()
+                session.duration_minutes = program.default_session_length_minutes
+            session.save()
+            statuses = latest_status_by_participant(session).values()
+            present = sum(1 for s in statuses if s == AttendanceRecord.PRESENT)
+            messages.success(request, f"Session saved — {present} present · {program.name}.")
+            return redirect("attendance:home")
+    else:
+        default_for = session.facilitator_of_record_id or _default_facilitator_id(
+            program, request.user
+        )
+        form = SessionWrapForm(
+            program=program,
+            initial={"note": session.notes, "facilitator_of_record": default_for},
+        )
+
+    statuses = latest_status_by_participant(session).values()
+    return render(
+        request,
+        "attendance/session_wrap.html",
+        {
+            "program": program,
+            "session": session,
+            "form": form,
+            "present": sum(1 for s in statuses if s == AttendanceRecord.PRESENT),
+            "absent": sum(1 for s in statuses if s == AttendanceRecord.ABSENT),
+        },
+    )
+
+
+def _default_facilitator_id(program, user):
+    """Pre-fill FoR with the program default, else the logged-in facilitator if assigned."""
+    if program.default_facilitator_id:
+        return program.default_facilitator_id
+    if program.facilitators.filter(pk=user.pk).exists():
+        return user.pk
+    return None
 
 
 @facilitator_or_coordinator_required

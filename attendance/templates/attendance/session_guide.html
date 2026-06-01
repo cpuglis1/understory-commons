@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ program.name }} · {{ session.scheduled_date|date:"D M j" }} — Understory{% endblock %}
+
+{% block extra_head %}
+<style>
+  .crumbs { font-size: .85rem; margin-bottom: .75rem; }
+  .sg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+             border-bottom: 1px solid var(--line); padding-bottom: .75rem; margin-bottom: 1rem; }
+  .sg-head h1 { font-size: 1.15rem; }
+  .sg-head .date { color: var(--muted); font-size: .85rem; }
+  .sg-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: .9rem; }
+  .sg-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .all-here { font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer;
+              background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: .35rem .8rem; }
+  .all-here:hover { background: #FAFAFA; }
+  .roster { display: flex; flex-wrap: wrap; gap: .55rem; margin-bottom: 1.25rem; }
+  .chip { font: inherit; font-size: .92rem; font-weight: 500; cursor: pointer; display: inline-flex;
+          align-items: center; gap: .5rem; padding: .5rem .9rem; border-radius: 999px;
+          border: 1px solid var(--line); background: #fff; color: var(--muted); }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #C4C4C4; background: #fff; }
+  .chip.is-present { color: var(--ink); border-color: #BBF7D0; background: var(--pill-live-bg); }
+  .chip.is-present .dot { background: var(--tick, #16A34A); border-color: var(--tick, #16A34A); }
+  .divider { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+             border-top: 1px dashed var(--line); padding-top: .8rem; margin: .25rem 0 .8rem; }
+  .divider .why { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .add { display: flex; gap: .5rem; align-items: center; margin: .25rem 0 1.5rem; }
+  .add input { font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; }
+  .wrap-btn { display: block; width: 100%; max-width: 28rem; font-size: 1rem; padding: .8rem; }
+  .count .num { font-weight: 700; }
+  .empty { color: var(--muted); font-size: .9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="crumbs"><a href="{% url 'attendance:program_detail' program.slug %}">← {{ program.name }}</a></p>
+
+<div class="sg-head">
+  <h1>Who's here?</h1>
+  <span class="date">{{ session.scheduled_date|date:"l, F j" }}</span>
+</div>
+
+<form method="post" action="{% url 'attendance:attendance_log' program.slug %}">
+  {% csrf_token %}
+  <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+
+  <div class="sg-bar">
+    <span class="count"><span class="num" id="hereCount">0</span> here</span>
+    <button type="button" class="all-here" id="allHere">✓ all here</button>
+  </div>
+
+  {% if active or inactive %}
+    <div class="roster roster-active">
+      {% for c in active %}
+        <button type="button" class="chip {% if c.present %}is-present{% endif %}" data-target="status_{{ c.participant.id }}">
+          <span class="dot"></span>{{ c.participant.display_name }}
+        </button>
+        <input type="hidden" name="status_{{ c.participant.id }}" value="{% if c.present %}present{% else %}absent{% endif %}">
+      {% endfor %}
+    </div>
+
+    {% if inactive %}
+      <div class="divider">Inactive <span class="why">· absent the last 3 sessions — tap to bring back</span></div>
+      <div class="roster roster-inactive">
+        {% for c in inactive %}
+          <button type="button" class="chip {% if c.present %}is-present{% endif %}" data-target="status_{{ c.participant.id }}">
+            <span class="dot"></span>{{ c.participant.display_name }}
+          </button>
+          <input type="hidden" name="status_{{ c.participant.id }}" value="{% if c.present %}present{% else %}absent{% endif %}">
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="empty">No students on the roster yet — add the first one below.</p>
+  {% endif %}
+
+  <button type="submit" class="btn wrap-btn">Wrap up session →</button>
+</form>
+
+<form class="add" method="post" action="{% url 'attendance:session_add_participant' program.slug %}">
+  {% csrf_token %}
+  <input type="text" name="display_name" placeholder="+ Add someone (first name)" maxlength="200" autocomplete="off">
+  <button type="submit" class="btn btn-secondary">Add</button>
+</form>
+
+<script>
+  (function () {
+    function setChip(chip, present) {
+      var input = document.querySelector('input[name="' + chip.dataset.target + '"]');
+      if (!input) return;
+      input.value = present ? 'present' : 'absent';
+      chip.classList.toggle('is-present', present);
+    }
+    function refreshCount() {
+      var n = document.querySelectorAll('input[type=hidden][name^="status_"][value="present"]').length;
+      var el = document.getElementById('hereCount');
+      if (el) el.textContent = n;
+    }
+    document.querySelectorAll('.chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var input = document.querySelector('input[name="' + chip.dataset.target + '"]');
+        setChip(chip, input.value !== 'present');
+        refreshCount();
+      });
+    });
+    var allHere = document.getElementById('allHere');
+    if (allHere) {
+      allHere.addEventListener('click', function () {
+        document.querySelectorAll('.roster-active .chip').forEach(function (chip) { setChip(chip, true); });
+        refreshCount();
+      });
+    }
+    refreshCount();
+  })();
+</script>
+{% endblock %}

@@ -17,7 +17,7 @@
 {% if program.summary %}<p>{{ program.summary }}</p>{% endif %}
 
 <div class="detail-actions">
-  <a class="btn" href="{% url 'attendance:attendance_log' program.slug %}">Log attendance</a>
+  <a class="btn" href="{% url 'attendance:attendance_log' program.slug %}">Open today's session</a>
   {% if request.user.role == "coordinator" %}
     <a class="btn btn-secondary" href="{% url 'attendance:program_setup' program.slug %}">Set up program</a>
   {% endif %}

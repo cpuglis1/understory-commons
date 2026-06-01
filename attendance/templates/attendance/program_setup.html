@@ -41,10 +41,6 @@
 <p class="lede">Done once. These values make each session two taps and let pay prep do the
 math at month-end — you never touch them again in the normal case.</p>
 
-{% for message in messages %}
-  <div class="banner">{{ message }}</div>
-{% endfor %}
-
 <form method="post">
   {% csrf_token %}
 

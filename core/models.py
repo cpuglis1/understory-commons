@@ -147,6 +147,22 @@ class Session(TimestampedModel):
     scheduled_date = models.DateField()
     notes = models.TextField(blank=True)
 
+    # Session-guide lifecycle (see the ADR, D5). A session is created when it's opened
+    # (``created_at``) and stays open until wrapped; ``closed_at`` is null while open.
+    # ``facilitator_of_record`` is the PAY source of truth — decoupled from login
+    # identity (``AttendanceRecord.recorded_by`` stays the attestation). ``duration_minutes``
+    # is committed at close; ``auto_closed`` marks a session the Midnight Rule closed.
+    closed_at = models.DateTimeField(null=True, blank=True)
+    facilitator_of_record = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sessions_of_record",
+    )
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    auto_closed = models.BooleanField(default=False)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -157,6 +173,10 @@ class Session(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.program} — {self.scheduled_date}"
+
+    @property
+    def is_open(self) -> bool:
+        return self.closed_at is None
 
 
 class ProfileSnapshot(TimestampedModel):

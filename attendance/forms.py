@@ -146,3 +146,28 @@ class ProgramSetupForm(forms.Form):
             if created:
                 added += 1
         return added
+
+
+class SessionWrapForm(forms.Form):
+    """The wrap step of the session guide (Slice B): the free-text note + who ran it.
+
+    Generic on purpose — the same screen serves tutoring, a campus tour, or filmmaking.
+    The Facilitator of Record is the pay attribution (decoupled from login identity);
+    it pre-fills from the program's default facilitator and is editable here.
+    """
+
+    note = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "What did you work on today?"}),
+        label="How'd today go?",
+    )
+    facilitator_of_record = forms.ModelChoiceField(
+        queryset=Program.objects.none(),  # narrowed to this program's facilitators in __init__
+        required=False,
+        empty_label="— unassigned —",
+        label="Who ran it",
+    )
+
+    def __init__(self, *args, program: Program, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["facilitator_of_record"].queryset = program.facilitators.all()
