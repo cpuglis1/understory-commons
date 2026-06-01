@@ -165,11 +165,12 @@ If any of these are unclear, ask in chat rather than guessing in code:
 
 > Update this section at the start of each phase. Stale phase context is worse than no phase context.
 
-**Phase:** Grants ingest — next adapter (TBD; see below)
-**Shipped:** Slices 1–4 merged to main (2026-05-24). Seven adapters live: `propublica_np`, `irs_990pf`, `grants_gov`, `gov_dc_ost`, `gov_dc_moca`, `gov_dc_cah`, `dc_humanitiesdc`, `dc_eventsdc`, `cf_gwcf`. Structured-field extraction (deadline, award range, org type, subject areas) wired into all DC/CF adapters. 81,424 `OpportunityInstance` rows; 57 non-grants_gov rows (DC + GWCF).
-**What's thin:** DC rows are mostly closed or award-amount-null (amounts are in PDFs). GWCF produced one scholarship, not a CBO grant. CF cycle is off-season.
-**Next candidates:** `pf_*` private foundation adapters (rolling applications, higher CBO relevance) or `uwnca`. Confirm a cycle is open before building.
-**Snapshot:** `corpus-2026-05-24-cf-gwcf` (event_log_position=329757)
+**Phase:** Coordinator surface — the **Session Guide** build (set up once → open/attendance/wrap per session → reporting view + pay prep fall out). NO LLM in this V1.
+**Canonical UX:** `docs/design/2026-05-31-session-guide-concept.md` (the brief — source of truth).
+**Plan + ADR (STEP 1, Opus, done 2026-05-31):** `docs/plans/2026-05-31-session-guide.md` + `docs/decisions/2026-05-31-session-guide-data-model-and-midnight-rule.md`. Confirmed with Chris: rate per (facilitator, program) via a `through` model; `TIME_ZONE="America/New_York"`; pay rows per (facilitator, program, month).
+**Build (STEP 2, Sonnet, slice by slice):** A Setup (pay defaults + per-facilitator rate + roster load) → B Session guide (open → tap-first attendance + ghosting divider → wrap note + facilitator-of-record; + Midnight Rule auto-close cron command) → C Reporting card (trend + note + last-logged) → D Pay prep (sessions×duration×rate → reconcile/approve/paid/CSV; math only, no money movement).
+**Supersedes:** the AI multiplier in `docs/plans/2026-05-30-coordinator-surface.md` §2 (no parent-draft, no AI parse, no `commons/ai/client.py`).
+**Grants ingest** is paused: seven adapters live; snapshot `corpus-2026-05-24-cf-gwcf` (event_log_position=329757). Resume with `pf_*` or `uwnca` (confirm a cycle is open) after the coordinator surface.
 
 ---
 
