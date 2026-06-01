@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Facilitator pay · {{ month_start|date:"F Y" }} — Understory{% endblock %}
+
+{% block extra_head %}
+<style>
+  .crumbs { font-size: .85rem; margin-bottom: .75rem; }
+  .pay-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
+              flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .9rem; margin-bottom: 1rem; }
+  .pay-head h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; }
+  .pay-head .sub { color: var(--muted); font-size: .85rem; margin-top: 3px; }
+  .month-nav { display: inline-flex; align-items: center; gap: .5rem; font-size: .85rem; }
+  .month-nav a { border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; background: #fff; }
+  .month-nav a:hover { background: #FAFAFA; }
+  .month-nav .cur { font-weight: 600; padding: 0 .3rem; }
+
+  .payrow { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; background: #fff;
+            box-shadow: 0 1px 2px rgba(0,0,0,.04); overflow: hidden; }
+  .payrow .main { display: flex; align-items: center; gap: 1rem; padding: 14px 18px; flex-wrap: wrap; }
+  .payrow .who { font-weight: 600; min-width: 11rem; }
+  .payrow .who .prog { display: block; color: var(--muted); font-weight: 400; font-size: .82rem; margin-top: 2px; }
+  .payrow .figs { color: #3F3F46; font-size: .9rem; flex: 1; }
+  .payrow .figs .num { font-variant-numeric: tabular-nums; }
+  .payrow .figs b { font-weight: 700; }
+  .payrow .figs .flag { color: #92400E; font-weight: 600; }
+  .payrow .figs .flag a { text-decoration: underline; }
+  .payrow .action { display: flex; align-items: center; gap: .6rem; }
+  .pill-status { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                 padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+  .pill-status.approved { background: var(--pill-beta-bg); color: var(--pill-beta-fg); border-color: var(--pill-beta-bd); }
+  .pill-status.paid { background: var(--pill-live-bg); color: var(--pill-live-fg); border-color: var(--pill-live-bd); }
+  .recon { border-top: 1px solid var(--line); }
+  .recon > summary { cursor: pointer; list-style: none; padding: 9px 18px; font-size: .78rem; color: var(--muted); }
+  .recon > summary::-webkit-details-marker { display: none; }
+  .recon > summary:hover { color: var(--ink); }
+  .recon .lines { padding: 4px 18px 14px; }
+  .recon .line { display: flex; align-items: center; gap: .6rem; padding: 5px 0; font-size: .85rem; }
+  .recon .line .d { min-width: 7rem; color: #3F3F46; }
+  .recon .line input { width: 5rem; font: inherit; padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 6px; }
+  .recon .line .mins { color: var(--muted); font-size: .8rem; }
+  .total { display: flex; justify-content: flex-end; gap: 1rem; align-items: baseline;
+           padding: 14px 18px 0; font-size: 1rem; }
+  .total .num { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stops { color: var(--muted); font-size: .78rem; margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem; max-width: 44rem; }
+  .empty { color: var(--muted); font-size: .9rem; padding: 1.5rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="crumbs"><a href="{% url 'attendance:home' %}">← Dashboard</a></p>
+
+<div class="pay-head">
+  <div>
+    <h1>Facilitator pay</h1>
+    <div class="sub">Hours from logged sessions · approve and export for your bookkeeper</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <span class="month-nav">
+      <a href="?month={{ prev_month }}">‹</a>
+      <span class="cur">{{ month_start|date:"F Y" }}</span>
+      <a href="?month={{ next_month }}">›</a>
+    </span>
+    <a class="btn btn-secondary" href="?month={{ month_value }}&amp;export=csv">Export CSV ⤓</a>
+  </div>
+</div>
+
+{% for row in rows %}
+<div class="payrow">
+  <div class="main">
+    <div class="who">
+      {% if row.facilitator %}{{ row.facilitator.display_name }}{% else %}<span class="muted">Unassigned</span>{% endif %}
+      <span class="prog">{{ row.program.name }}</span>
+    </div>
+    <div class="figs">
+      <span class="num">{{ row.session_count }}</span> session{{ row.session_count|pluralize }}
+      · <span class="num">{{ row.hours|floatformat:1 }}</span> hrs
+      {% if row.payable %}
+        · <span class="num">{{ row.rate_display }}</span>/hr
+        · <b class="num">{{ row.amount_display }}</b>
+      {% else %}
+        · <span class="flag">{% if row.flag == "no rate" %}<a href="{% url 'attendance:program_setup' row.program.slug %}">set a rate</a>{% else %}no facilitator on these sessions{% endif %}</span>
+      {% endif %}
+    </div>
+    <div class="action">
+      {% if row.payable %}
+        {% if row.status == statuses.PAID %}
+          <span class="pill-status paid">✓ Paid</span>
+        {% elif row.status == statuses.APPROVED %}
+          <span class="pill-status approved">Approved</span>
+          <form method="post" action="{% url 'attendance:pay_paid' %}">
+            {% csrf_token %}
+            <input type="hidden" name="program_id" value="{{ row.program.id }}">
+            <input type="hidden" name="facilitator_id" value="{{ row.facilitator.id }}">
+            <input type="hidden" name="month" value="{{ month_value }}">
+            <button class="btn" type="submit">Mark paid</button>
+          </form>
+        {% else %}
+          <form method="post" action="{% url 'attendance:pay_approve' %}">
+            {% csrf_token %}
+            <input type="hidden" name="program_id" value="{{ row.program.id }}">
+            <input type="hidden" name="facilitator_id" value="{{ row.facilitator.id }}">
+            <input type="hidden" name="month" value="{{ month_value }}">
+            <button class="btn btn-secondary" type="submit">Approve</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <details class="recon">
+    <summary>Adjust sessions ({{ row.session_count }})</summary>
+    <div class="lines">
+      {% for ps in row.sessions %}
+      <form class="line" method="post" action="{% url 'attendance:pay_adjust' %}">
+        {% csrf_token %}
+        <input type="hidden" name="session_id" value="{{ ps.session.id }}">
+        <input type="hidden" name="month" value="{{ month_value }}">
+        <span class="d">{{ ps.session.scheduled_date|date:"D M j" }}</span>
+        <input type="number" name="duration_minutes" value="{{ ps.minutes }}" min="0" max="1440" step="5">
+        <span class="mins">min{% if ps.session.auto_closed %} · auto-closed{% endif %}</span>
+        <button class="btn btn-secondary" type="submit">Save</button>
+      </form>
+      {% endfor %}
+    </div>
+  </details>
+</div>
+{% empty %}
+<p class="empty">No closed sessions this month yet. Sessions become payable once they're
+wrapped (or auto-closed by the Midnight Rule).</p>
+{% endfor %}
+
+{% if rows %}
+<div class="total">Total <span class="num">{{ total_display }}</span></div>
+{% endif %}
+
+<p class="stops">Understory does the pre-processing — collecting hours, the math, an approval
+step, and a clean export. It does <strong>not</strong> run payroll: no tax, no filings, no
+moving money. Hand the export to your bookkeeper or import it into Gusto / QuickBooks.</p>
+{% endblock %}

@@ -19,4 +19,8 @@ urlpatterns = [
     path("programs/<slug:slug>/log/wrap/", views.session_wrap, name="session_wrap"),
     path("programs/<slug:slug>/preview/", views.program_preview, name="program_preview"),
     path("programs/<slug:slug>/publish/", views.program_publish, name="program_publish"),
+    path("pay/", views.pay_prep, name="pay_prep"),
+    path("pay/approve/", views.pay_approve, name="pay_approve"),
+    path("pay/paid/", views.pay_paid, name="pay_paid"),
+    path("pay/adjust/", views.pay_adjust, name="pay_adjust"),
 ]

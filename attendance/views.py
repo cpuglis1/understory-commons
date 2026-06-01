@@ -1,22 +1,24 @@
 import calendar
+import csv
 import datetime
 import uuid
 from decimal import Decimal
 
 from django.contrib import messages
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from accounts.decorators import coordinator_required, facilitator_or_coordinator_required
+from accounts.models import User
 from core.models import Session
 from core.queries import programs_visible_to
 from core.services.snapshots import build_draft, current_published, preview_payload, publish
 
-from . import launchpad
+from . import launchpad, pay
 from .forms import ProgramCreateForm, ProgramSetupForm, SessionWrapForm
-from .models import AttendanceRecord, Enrollment, Participant
+from .models import AttendanceRecord, Enrollment, FacilitatorPayPeriod, Participant
 from .queries import enrollment_states, latest_status_by_participant
 
 # V1 statuses surfaced in the session guide — present / absent only (the model also
@@ -343,3 +345,129 @@ def program_publish(request, slug: str):
     draft = build_draft(program, coverage_start, coverage_end)
     publish(draft, request.user)
     return redirect("attendance:program_detail", slug=slug)
+
+
+# --------------------------------------------------------------------------- #
+# Pay prep (Slice D) — the month-end byproduct. Coordinator-only.
+# --------------------------------------------------------------------------- #
+
+
+def _parse_month(value: str | None) -> datetime.date:
+    """Parse ?month=YYYY-MM to a first-of-month date; default to the current month."""
+    try:
+        return datetime.datetime.strptime(value, "%Y-%m").date().replace(day=1)
+    except (TypeError, ValueError):
+        return timezone.localdate().replace(day=1)
+
+
+def _pay_redirect(request):
+    month = request.POST.get("month", "")
+    url = reverse("attendance:pay_prep")
+    return f"{url}?month={month}" if month else url
+
+
+@coordinator_required
+def pay_prep(request):
+    """Monthly pay table across the coordinator's programs: sessions × duration × rate
+    per Facilitator of Record. ?export=csv streams the figures; the page also drives
+    reconcile / approve / mark-paid. Understory stops at the math (no money movement)."""
+    programs = list(programs_visible_to(request.user).filter(is_archived=False).order_by("name"))
+    month_start, month_end = pay.month_bounds(_parse_month(request.GET.get("month")))
+    rows = pay.pay_rows(programs, month_start, month_end)
+
+    if request.GET.get("export") == "csv":
+        return _pay_csv(rows, month_start)
+
+    return render(
+        request,
+        "attendance/pay_prep.html",
+        {
+            "rows": rows,
+            "month_start": month_start,
+            "month_value": month_start.strftime("%Y-%m"),
+            "prev_month": (month_start - datetime.timedelta(days=1)).strftime("%Y-%m"),
+            "next_month": (month_end + datetime.timedelta(days=1)).strftime("%Y-%m"),
+            "total_display": pay.dollars(pay.total_cents(rows)),
+            "statuses": FacilitatorPayPeriod,
+        },
+    )
+
+
+def _pay_csv(rows, month_start) -> HttpResponse:
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="pay-{month_start:%Y-%m}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["Facilitator", "Program", "Sessions", "Hours", "Rate", "Amount", "Status"])
+    for row in rows:
+        writer.writerow(
+            [
+                row.facilitator.display_name if row.facilitator else "(unassigned)",
+                row.program.name,
+                row.session_count,
+                f"{row.hours:.1f}",
+                row.rate_display or "",
+                row.amount_display or "",
+                row.status if row.payable else (row.flag or row.status),
+            ]
+        )
+    return response
+
+
+def _pay_period(request):
+    """Resolve + scope the (program, facilitator, month) a pay action targets, or 404."""
+    program = get_object_or_404(
+        programs_visible_to(request.user), pk=request.POST.get("program_id")
+    )
+    facilitator = get_object_or_404(
+        User,
+        pk=request.POST.get("facilitator_id"),
+        organization=request.user.organization,
+        role=User.FACILITATOR,
+    )
+    period, _ = FacilitatorPayPeriod.objects.get_or_create(
+        program=program,
+        facilitator=facilitator,
+        period_month=_parse_month(request.POST.get("month")),
+    )
+    return period
+
+
+@coordinator_required
+def pay_approve(request):
+    if request.method == "POST":
+        period = _pay_period(request)
+        period.status = FacilitatorPayPeriod.APPROVED
+        period.approved_by = request.user
+        period.approved_at = timezone.now()
+        period.save()
+    return redirect(_pay_redirect(request))
+
+
+@coordinator_required
+def pay_paid(request):
+    if request.method == "POST":
+        period = _pay_period(request)
+        period.status = FacilitatorPayPeriod.PAID
+        period.paid_at = timezone.now()
+        period.save()
+    return redirect(_pay_redirect(request))
+
+
+@coordinator_required
+def pay_adjust(request):
+    """Reconcile one session's pay duration (0 = a weather cancellation). Mutable on
+    purpose: pay is internal, not a donor-verified metric (ADR D9)."""
+    if request.method == "POST":
+        session = get_object_or_404(
+            Session,
+            pk=request.POST.get("session_id"),
+            program__in=programs_visible_to(request.user),
+        )
+        try:
+            minutes = int(request.POST.get("duration_minutes", ""))
+        except (TypeError, ValueError):
+            minutes = None
+        if minutes is not None and 0 <= minutes <= 1440:
+            session.duration_minutes = minutes
+            session.save()
+    return redirect(_pay_redirect(request))

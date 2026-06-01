@@ -66,6 +66,59 @@ class Enrollment(TimestampedModel):
         return f"{self.participant} ∈ {self.program}"
 
 
+class FacilitatorPayPeriod(TimestampedModel):
+    """Approve/paid state for one facilitator's pay on one program in one month (ADR D9).
+
+    The payable figures themselves (sessions, hours, amount) are *derived* from closed
+    sessions × duration × rate — never stored here. This row only persists the workflow
+    state a coordinator sets (approved, then paid). Understory stops at the math: no tax,
+    no filings, no money movement.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    PAID = "paid"
+    STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (APPROVED, "Approved"),
+        (PAID, "Paid"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    program = models.ForeignKey(
+        "core.Program",
+        on_delete=models.CASCADE,
+        related_name="pay_periods",
+    )
+    facilitator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="pay_periods",
+    )
+    period_month = models.DateField()  # first-of-month key
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=PENDING)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program", "facilitator", "period_month"],
+                name="unique_pay_period",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.facilitator} · {self.program} · {self.period_month:%Y-%m} ({self.status})"
+
+
 class AttendanceRecord(models.Model):
     """Append-only record of a participant's attendance at a session.
 
