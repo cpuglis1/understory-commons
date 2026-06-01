@@ -29,6 +29,11 @@
     .btn-secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
     .btn-secondary:hover{background:#FAFAFA}
 
+    /* flash messages */
+    .flashes{margin-bottom:1.1rem;display:flex;flex-direction:column;gap:.5rem}
+    .flash{background:var(--pill-live-bg);color:var(--pill-live-fg);border:1px solid var(--pill-live-bd);
+           border-radius:8px;padding:.55rem .8rem;font-size:.85rem}
+
     /* ---------- top bar ---------- */
     .topbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.85);
       backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--line)}
@@ -116,7 +121,7 @@
               <ul>
                 <li><a href="{% url 'accounts:facilitator_new' %}">Facilitators &amp; invites</a> <span class="pill live">Live</span></li>
                 <li class="soon">Timesheets <span class="pill soon">Soon</span></li>
-                <li class="soon">Monthly payroll prep <span class="pill soon">Soon</span></li>
+                <li><a href="{% url 'attendance:pay_prep' %}">Monthly payroll prep</a> <span class="pill beta">Beta</span></li>
               </ul>
             </div>
             <div>
@@ -165,6 +170,11 @@
   </header>
   {% endif %}
   <div class="container">
+    {% if messages %}
+      <div class="flashes">
+        {% for message in messages %}<div class="flash">{{ message }}</div>{% endfor %}
+      </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </div>
   <script>

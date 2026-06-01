@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Wrap up · {{ program.name }} — Understory{% endblock %}
+
+{% block extra_head %}
+<style>
+  .crumbs { font-size: .85rem; margin-bottom: .75rem; }
+  .wrap-head { border-bottom: 1px solid var(--line); padding-bottom: .75rem; margin-bottom: 1.25rem; }
+  .wrap-head h1 { font-size: 1.15rem; }
+  .wrap-head .tally { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
+  .wrap-head .tally .num { font-weight: 700; color: var(--ink); }
+  .field { margin-bottom: 1.25rem; max-width: 30rem; }
+  .field label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .35rem; }
+  .field textarea, .field select { font: inherit; width: 100%; padding: .55rem .65rem;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .save-btn { font-size: 1rem; padding: .75rem 1.1rem; }
+  .errorlist { color: #B91C1C; font-size: .78rem; list-style: none; margin: .3rem 0 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="crumbs"><a href="{% url 'attendance:attendance_log' program.slug %}">← Attendance</a></p>
+
+<div class="wrap-head">
+  <h1>How'd today go?</h1>
+  <p class="tally">{{ program.name }} · <span class="num">{{ present }}</span> here · <span class="num">{{ absent }}</span> out</p>
+</div>
+
+<form method="post" action="{% url 'attendance:session_wrap' program.slug %}">
+  {% csrf_token %}
+
+  <div class="field">
+    <label for="{{ form.note.id_for_label }}">{{ form.note.label }}</label>
+    {{ form.note }}
+    {{ form.note.errors }}
+  </div>
+
+  <div class="field">
+    <label for="{{ form.facilitator_of_record.id_for_label }}">{{ form.facilitator_of_record.label }}</label>
+    {{ form.facilitator_of_record }}
+    {{ form.facilitator_of_record.errors }}
+  </div>
+
+  <button type="submit" class="btn save-btn">Save &amp; close ✓</button>
+</form>
+{% endblock %}

@@ -1,6 +1,10 @@
+from decimal import Decimal
+
 from django import forms
 
-from core.models import Program
+from core.models import Program, ProgramFacilitator
+
+from .models import Enrollment, Participant
 
 
 class ProgramCreateForm(forms.ModelForm):
@@ -28,3 +32,142 @@ class ProgramCreateForm(forms.ModelForm):
             "summary": "Short description",
             "site_label": "Site / location",
         }
+
+
+class ProgramSetupForm(forms.Form):
+    """The one-time per-program setup (session-guide Slice A, coordinator-only).
+
+    Captures the two pay defaults (session length + default facilitator), a per-
+    facilitator hourly rate, and a paste-a-list roster. Everything here is idempotent:
+    re-saving the same page changes nothing (rates upsert, roster dedupes), so a refresh
+    or double-submit is safe.
+
+    PII boundary: the roster stores ``display_name`` only (first name / nickname). No
+    contact field is created or accepted.
+    """
+
+    default_session_length_minutes = forms.IntegerField(
+        min_value=1,
+        max_value=600,
+        label="Default session length (minutes)",
+        widget=forms.NumberInput(attrs={"step": 5}),
+    )
+    default_facilitator = forms.ModelChoiceField(
+        queryset=Program.objects.none(),  # narrowed in __init__ to this program's facilitators
+        required=False,
+        empty_label="— none yet —",
+        label="Default facilitator",
+        help_text="Pre-fills who ran each session (the Facilitator of Record).",
+    )
+    roster = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 5, "placeholder": "One first name per line…"}),
+        label="Add students to the roster",
+        help_text="First names only — no last names or contact info.",
+    )
+
+    def __init__(self, *args, program: Program, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.program = program
+        facilitators = list(program.facilitators.all().order_by("display_name"))
+        self.fields["default_facilitator"].queryset = program.facilitators.all()
+        # One hourly-rate field per assigned facilitator, in dollars. Built dynamically
+        # because rate is per (facilitator, program) — see the ADR (D1).
+        self.rate_fields: list[tuple[object, str]] = []
+        for facilitator in facilitators:
+            field_name = f"rate_{facilitator.pk}"
+            self.fields[field_name] = forms.DecimalField(
+                required=False,
+                min_value=0,
+                max_digits=8,
+                decimal_places=2,
+                label=facilitator.display_name,
+                widget=forms.NumberInput(attrs={"step": "0.50", "placeholder": "—"}),
+            )
+            self.rate_fields.append((facilitator, field_name))
+
+    def iter_rate_fields(self):
+        """Yield (facilitator, bound_field) for template rendering."""
+        for facilitator, field_name in self.rate_fields:
+            yield facilitator, self[field_name]
+
+    def save(self) -> int:
+        """Persist defaults + rates + roster. Returns the count of newly enrolled students."""
+        cd = self.cleaned_data
+        program = self.program
+
+        program.default_session_length_minutes = cd["default_session_length_minutes"]
+        program.default_facilitator = cd.get("default_facilitator")
+        program.save()
+
+        # Rates: a provided value upserts; a blank field leaves the existing rate
+        # untouched (so saving the page for the roster doesn't wipe a rate).
+        for facilitator, field_name in self.rate_fields:
+            value = cd.get(field_name)
+            if value is None:
+                continue
+            cents = int((value * Decimal(100)).to_integral_value())
+            ProgramFacilitator.objects.update_or_create(
+                program=program,
+                facilitator=facilitator,
+                defaults={"hourly_rate_cents": cents},
+            )
+
+        return self._load_roster(cd.get("roster") or "")
+
+    def _load_roster(self, raw: str) -> int:
+        """Append pasted first names as Participant + Enrollment, deduped.
+
+        Dedupe is within the org by ``display_name`` (case-insensitive), reusing an
+        existing participant so a kid already known to the org isn't duplicated; an
+        Enrollment is get_or_create'd so re-pasting a name enrolls nobody twice.
+        """
+        org = self.program.organization
+        added = 0
+        seen: set[str] = set()
+        for line in raw.splitlines():
+            name = line.strip()
+            if not name:
+                continue
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            participant = Participant.objects.filter(
+                organization=org,
+                merged_into__isnull=True,
+                display_name__iexact=name,
+            ).first()
+            if participant is None:
+                participant = Participant.objects.create(organization=org, display_name=name)
+            _, created = Enrollment.objects.get_or_create(
+                program=self.program, participant=participant
+            )
+            if created:
+                added += 1
+        return added
+
+
+class SessionWrapForm(forms.Form):
+    """The wrap step of the session guide (Slice B): the free-text note + who ran it.
+
+    Generic on purpose — the same screen serves tutoring, a campus tour, or filmmaking.
+    The Facilitator of Record is the pay attribution (decoupled from login identity);
+    it pre-fills from the program's default facilitator and is editable here.
+    """
+
+    note = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "What did you work on today?"}),
+        label="How'd today go?",
+    )
+    facilitator_of_record = forms.ModelChoiceField(
+        queryset=Program.objects.none(),  # narrowed to this program's facilitators in __init__
+        required=False,
+        empty_label="— unassigned —",
+        label="Who ran it",
+    )
+
+    def __init__(self, *args, program: Program, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["facilitator_of_record"].queryset = program.facilitators.all()

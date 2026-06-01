@@ -63,11 +63,25 @@ class Program(TimestampedModel):
     )
     facilitators = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
+        through="core.ProgramFacilitator",
         related_name="facilitated_programs",
         limit_choices_to={"role": "facilitator"},
         blank=True,
     )
     is_archived = models.BooleanField(default=False)
+
+    # Session-guide pay defaults (set once at setup; see the session-guide ADR).
+    # The default length feeds pay-prep math; the default facilitator pre-fills the
+    # wrap screen's Facilitator of Record.
+    default_session_length_minutes = models.PositiveIntegerField(default=90)
+    default_facilitator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="default_for_programs",
+        limit_choices_to={"role": "facilitator"},
+    )
 
     def __str__(self) -> str:
         return self.name
@@ -88,6 +102,41 @@ class Program(TimestampedModel):
             )
 
 
+class ProgramFacilitator(models.Model):
+    """Through-model for Program.facilitators carrying the per-(program, facilitator)
+    pay rate (see the session-guide ADR, D1/D2).
+
+    Rate lives on the assignment, not on the program or the person, so a senior lead
+    and a junior helper can be paid differently in the same program. ``hourly_rate_cents``
+    is nullable — an unset rate is *not* $0; pay-prep flags it. Money is integer cents.
+
+    Plain ``Model`` (not ``TimestampedModel``) and ``db_table``/``db_column`` adopt the
+    existing auto-created M2M table without data loss; the migration uses
+    ``SeparateDatabaseAndState`` to keep its rows.
+    """
+
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.CASCADE,
+        related_name="facilitator_links",
+    )
+    facilitator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        db_column="user_id",
+        related_name="program_links",
+        limit_choices_to={"role": "facilitator"},
+    )
+    hourly_rate_cents = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "core_program_facilitators"
+        unique_together = (("program", "facilitator"),)
+
+    def __str__(self) -> str:
+        return f"{self.facilitator} @ {self.program}"
+
+
 class Session(TimestampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     program = models.ForeignKey(
@@ -97,6 +146,22 @@ class Session(TimestampedModel):
     )
     scheduled_date = models.DateField()
     notes = models.TextField(blank=True)
+
+    # Session-guide lifecycle (see the ADR, D5). A session is created when it's opened
+    # (``created_at``) and stays open until wrapped; ``closed_at`` is null while open.
+    # ``facilitator_of_record`` is the PAY source of truth — decoupled from login
+    # identity (``AttendanceRecord.recorded_by`` stays the attestation). ``duration_minutes``
+    # is committed at close; ``auto_closed`` marks a session the Midnight Rule closed.
+    closed_at = models.DateTimeField(null=True, blank=True)
+    facilitator_of_record = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sessions_of_record",
+    )
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    auto_closed = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -108,6 +173,10 @@ class Session(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.program} — {self.scheduled_date}"
+
+    @property
+    def is_open(self) -> bool:
+        return self.closed_at is None
 
 
 class ProfileSnapshot(TimestampedModel):
