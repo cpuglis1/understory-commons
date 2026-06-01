@@ -212,6 +212,77 @@ def test_card_profile_stale_when_old(coordinator, program):
 
 
 # ======================================================================== #
+# Slice C: reporting read (recent trend + latest note + last-logged actor)
+# ======================================================================== #
+
+
+@pytest.mark.django_db
+def test_card_recent_trend_reflects_records(coordinator, program):
+    P, A = AttendanceRecord.PRESENT, AttendanceRecord.ABSENT
+    _session(program, coordinator, datetime.date(2026, 5, 20), [P, P, A])  # 2 here, 1 out
+    _session(program, coordinator, datetime.date(2026, 5, 27), [P, P, P])  # 3 here
+    [card] = launchpad.program_cards([program], _month(), today=FIXED_TODAY)
+    assert len(card.recent) == 2
+    assert (card.recent[0].present, card.recent[0].absent) == (2, 1)  # oldest first
+    assert (card.recent[1].present, card.recent[1].absent) == (3, 0)
+
+
+@pytest.mark.django_db
+def test_card_note_and_last_logged_actor(coordinator, program, facilitator):
+    session = _session(program, coordinator, datetime.date(2026, 5, 27), [AttendanceRecord.PRESENT])
+    session.notes = "shot the final scene"
+    session.facilitator_of_record = facilitator
+    session.save()
+    [card] = launchpad.program_cards([program], _month(), today=FIXED_TODAY)
+    assert card.latest_note == "shot the final scene"
+    assert card.last_logged_date == datetime.date(2026, 5, 27)
+    assert card.last_logged_actor == facilitator.display_name  # the FoR (pay actor)
+    assert card.last_auto_closed is False
+
+
+@pytest.mark.django_db
+def test_card_actor_falls_back_to_recorder(coordinator, program):
+    # no facilitator_of_record set → actor falls back to who recorded the attendance
+    _session(program, coordinator, datetime.date(2026, 5, 27), [AttendanceRecord.PRESENT])
+    [card] = launchpad.program_cards([program], _month(), today=FIXED_TODAY)
+    assert card.last_logged_actor == coordinator.display_name
+
+
+@pytest.mark.django_db
+def test_card_auto_closed_flag(coordinator, program):
+    session = _session(program, coordinator, datetime.date(2026, 5, 27), [AttendanceRecord.ABSENT])
+    session.auto_closed = True
+    session.save()
+    [card] = launchpad.program_cards([program], _month(), today=FIXED_TODAY)
+    assert card.last_auto_closed is True
+    assert card.recent[-1].auto_closed is True
+
+
+@pytest.mark.django_db
+def test_card_honest_empty_when_no_sessions(coordinator, program):
+    [card] = launchpad.program_cards([program], _month(), today=FIXED_TODAY)
+    assert card.recent == []
+    assert card.latest_note == ""
+    assert card.last_logged_date is None
+    assert card.last_logged_actor is None
+
+
+@pytest.mark.django_db
+def test_home_renders_trend_and_note_without_pii(coordinator, program, client):
+    P = AttendanceRecord.PRESENT
+    session = _session(program, coordinator, FIXED_TODAY, [P, P])  # participants named SECRET_NAME
+    session.notes = "wrapped the mural"
+    session.save()
+    client.force_login(coordinator)
+    response = client.get(HOME)
+    assert response.status_code == 200
+    assert b"wrapped the mural" in response.content  # the wrap note is surfaced
+    assert b"Last logged" in response.content
+    # the trend + last-logged expose counts and staff only — never a participant's name
+    assert SECRET_NAME.encode() not in response.content
+
+
+# ======================================================================== #
 # View: auth + role scoping
 # ======================================================================== #
 

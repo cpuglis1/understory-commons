@@ -49,6 +49,13 @@
   .prog .facts{color:#52525B;font-size:.82rem;margin-top:3px}
   .prog .facts .warn{color:#92400E;font-weight:600}
   .prog .facts b{font-weight:600;color:#27272A}
+  .prog .trend{display:flex;gap:3px;margin-top:8px}
+  .prog .trend .tk{width:7px;height:15px;border-radius:2px;background:#E4E4E7}
+  .prog .trend .tk.on{background:#16A34A}
+  .prog .trend .tk.open{background:#fff;outline:1.5px solid #C4C4C4;outline-offset:-1px}
+  .prog .note{font-size:.82rem;color:#3F3F46;font-style:italic;margin-top:7px}
+  .prog .logged{font-size:.76rem;color:var(--muted);margin-top:4px}
+  .prog .logged .auto{color:#92400E;font-style:normal}
   .dots{color:#A1A1AA;font-size:1.2rem;letter-spacing:1px;padding:0 4px}
   .prog .empty-row{padding:18px 16px;color:var(--muted);font-size:.9rem}
 
@@ -123,6 +130,13 @@
             · {% if card.attendance_rate is not None %}{% widthratio card.attendance_rate 1 100 %}% attendance{% else %}—{% endif %}
             · {% if card.published %}<b>live v{{ card.published.version }}</b>{% else %}not published{% endif %}
           </div>
+          {% if card.recent %}
+          <div class="trend">
+            {% for t in card.recent %}<span class="tk{% if t.present %} on{% endif %}{% if t.is_open %} open{% endif %}" title="{{ t.date|date:'M j' }} · {{ t.present }} here · {{ t.absent }} out{% if t.auto_closed %} · auto-closed{% endif %}{% if t.is_open %} · open{% endif %}"></span>{% endfor %}
+          </div>
+          {% endif %}
+          {% if card.latest_note %}<div class="note">“{{ card.latest_note|truncatechars:64 }}”</div>{% endif %}
+          {% if card.last_logged_date %}<div class="logged">Last logged {{ card.last_logged_date|date:"D M j" }}{% if card.last_logged_actor %} · by {{ card.last_logged_actor }}{% endif %}{% if card.last_auto_closed %} · <span class="auto">auto-closed</span>{% endif %}</div>{% endif %}
         </div>
         <a class="dots" href="{% url 'attendance:program_detail' card.program.slug %}" title="Open program">⋯</a>
       </div>
