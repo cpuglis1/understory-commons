@@ -1,6 +1,8 @@
 import calendar
 import datetime
+from decimal import Decimal
 
+from django.contrib import messages
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -11,7 +13,7 @@ from core.queries import programs_visible_to
 from core.services.snapshots import build_draft, current_published, preview_payload, publish
 
 from . import launchpad
-from .forms import ProgramCreateForm
+from .forms import ProgramCreateForm, ProgramSetupForm
 
 
 def _current_month() -> tuple[datetime.date, datetime.date]:
@@ -104,6 +106,51 @@ def program_new(request):
     else:
         form = ProgramCreateForm()
     return render(request, "attendance/program_new.html", {"form": form})
+
+
+def _setup_initial(program) -> dict:
+    """Initial values for the setup form: current defaults + existing rates (cents→dollars)."""
+    initial = {
+        "default_session_length_minutes": program.default_session_length_minutes,
+        "default_facilitator": program.default_facilitator_id,
+    }
+    for link in program.facilitator_links.all():
+        if link.hourly_rate_cents is not None:
+            initial[f"rate_{link.facilitator_id}"] = Decimal(link.hourly_rate_cents) / 100
+    return initial
+
+
+@coordinator_required
+def program_setup(request, slug: str):
+    """One-time per-program setup (session-guide Slice A): pay defaults, per-facilitator
+    rates, and a paste-a-list roster. Coordinator-only; cross-org slug → 404.
+
+    Idempotent save (rates upsert, roster dedupes) + post-redirect-get, so a refresh
+    never double-enrolls.
+    """
+    program = get_object_or_404(
+        programs_visible_to(request.user).filter(is_archived=False), slug=slug
+    )
+    if request.method == "POST":
+        form = ProgramSetupForm(request.POST, program=program)
+        if form.is_valid():
+            added = form.save()
+            if added:
+                messages.success(
+                    request,
+                    f"Added {added} student{'' if added == 1 else 's'} to the roster.",
+                )
+            messages.success(request, "Program setup saved.")
+            return redirect("attendance:program_setup", slug=program.slug)
+    else:
+        form = ProgramSetupForm(program=program, initial=_setup_initial(program))
+
+    roster = program.enrollments.select_related("participant").order_by("participant__display_name")
+    return render(
+        request,
+        "attendance/program_setup.html",
+        {"program": program, "form": form, "roster": roster},
+    )
 
 
 @facilitator_or_coordinator_required

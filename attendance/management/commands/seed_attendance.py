@@ -12,7 +12,7 @@ import random
 
 from django.core.management.base import BaseCommand, CommandError
 
-from attendance.models import AttendanceRecord, Participant
+from attendance.models import AttendanceRecord, Enrollment, Participant
 from core.models import Program, Session
 
 # Synthetic first names — no real participant identifiers, ever.
@@ -80,6 +80,8 @@ class Command(BaseCommand):
             p, _ = Participant.objects.get_or_create(
                 organization=program.organization, display_name=name
             )
+            # Enroll so the program carries a roster (session-guide Slice A).
+            Enrollment.objects.get_or_create(program=program, participant=p)
             participants.append(p)
 
         created_sessions = 0

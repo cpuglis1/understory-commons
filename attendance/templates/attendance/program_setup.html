@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Set up · {{ program.name }} — Understory Commons{% endblock %}
+
+{% block extra_head %}
+<style>
+  .crumbs { font-size: .85rem; margin-bottom: .75rem; }
+  .lede { color: var(--muted); margin: .25rem 0 1.5rem; max-width: 46rem; }
+  .banner { background: var(--pill-live-bg); color: var(--pill-live-fg);
+            border: 1px solid var(--pill-live-bd); border-radius: 8px;
+            padding: .6rem .85rem; font-size: .85rem; margin-bottom: 1.25rem; }
+  .section { border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px;
+             margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .section h2 { font-size: 1rem; margin-bottom: .35rem; }
+  .section .hint { color: var(--muted); font-size: .82rem; margin-bottom: 1rem; }
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .3rem; }
+  .field .help { color: var(--muted); font-size: .76rem; margin-top: .25rem; }
+  .field input[type=number], .field select, .field textarea {
+    font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px;
+    width: 100%; max-width: 26rem; background: #fff; }
+  .field textarea { max-width: 32rem; }
+  .errorlist { color: #B91C1C; font-size: .78rem; list-style: none; margin: .3rem 0 0; }
+  .rate-row { display: flex; align-items: center; gap: .75rem; padding: .45rem 0;
+              border-bottom: 1px solid var(--line); }
+  .rate-row:last-child { border-bottom: 0; }
+  .rate-row .who { flex: 1; font-weight: 500; }
+  .rate-row .dollar { color: var(--muted); }
+  .rate-row input { width: 7rem; }
+  .empty { color: var(--muted); font-size: .85rem; }
+  .roster-list { list-style: none; margin: 0 0 1rem; padding: 0; columns: 2; max-width: 30rem; }
+  .roster-list li { padding: .2rem 0; font-size: .9rem; break-inside: avoid; }
+  .roster-count { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+                  color: var(--muted); margin-bottom: .5rem; }
+  .save-row { display: flex; gap: .9rem; align-items: center; margin-top: .5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="crumbs"><a href="{% url 'attendance:program_detail' program.slug %}">← {{ program.name }}</a></p>
+<h1>Set up {{ program.name }}</h1>
+<p class="lede">Done once. These values make each session two taps and let pay prep do the
+math at month-end — you never touch them again in the normal case.</p>
+
+{% for message in messages %}
+  <div class="banner">{{ message }}</div>
+{% endfor %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="section">
+    <h2>Session defaults</h2>
+    <p class="hint">The length feeds pay-prep math; the default facilitator pre-fills who ran
+    each session.</p>
+
+    <div class="field">
+      <label for="{{ form.default_session_length_minutes.id_for_label }}">{{ form.default_session_length_minutes.label }}</label>
+      {{ form.default_session_length_minutes }}
+      {{ form.default_session_length_minutes.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.default_facilitator.id_for_label }}">{{ form.default_facilitator.label }}</label>
+      {{ form.default_facilitator }}
+      <div class="help">{{ form.default_facilitator.help_text }}</div>
+      {{ form.default_facilitator.errors }}
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Facilitator rates</h2>
+    <p class="hint">Hourly rate per facilitator on this program. Set once; adjust only if it
+    changes.</p>
+    {% if form.rate_fields %}
+      {% for facilitator, field in form.iter_rate_fields %}
+        <div class="rate-row">
+          <span class="who">{{ facilitator.display_name }}</span>
+          <span class="dollar">$</span>
+          {{ field }}
+          <span class="dollar">/ hr</span>
+        </div>
+        {{ field.errors }}
+      {% endfor %}
+    {% else %}
+      <p class="empty">No facilitators assigned yet.
+        <a href="{% url 'accounts:facilitator_new' %}">Assign a facilitator</a> first, then set rates here.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2>Roster</h2>
+    <p class="hint">First names only — no last names or contact info.</p>
+
+    {% if roster %}
+      <div class="roster-count">{{ roster|length }} enrolled</div>
+      <ul class="roster-list">
+        {% for enrollment in roster %}<li>{{ enrollment.participant.display_name }}</li>{% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">No students enrolled yet — paste the enrollment list below.</p>
+    {% endif %}
+
+    <div class="field">
+      <label for="{{ form.roster.id_for_label }}">{{ form.roster.label }}</label>
+      {{ form.roster }}
+      <div class="help">{{ form.roster.help_text }}</div>
+      {{ form.roster.errors }}
+    </div>
+  </div>
+
+  <div class="save-row">
+    <button class="btn" type="submit">Save setup</button>
+    <a class="muted" href="{% url 'attendance:program_detail' program.slug %}">Back to program</a>
+  </div>
+</form>
+{% endblock %}

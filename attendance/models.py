@@ -33,6 +33,39 @@ class Participant(TimestampedModel):
         return self.display_name
 
 
+class Enrollment(TimestampedModel):
+    """A participant's membership in a program — the per-program roster link.
+
+    ``Participant`` stays organization-scoped (one row per kid, ``display_name`` only);
+    a kid in two programs is one ``Participant`` with two ``Enrollment``s. ACTIVE vs
+    INACTIVE is *derived* from the attendance log (the ghosting threshold), never stored
+    here — see the session-guide ADR (D3/D4).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    program = models.ForeignKey(
+        "core.Program",
+        on_delete=models.CASCADE,
+        related_name="enrollments",
+    )
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.PROTECT,
+        related_name="enrollments",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program", "participant"],
+                name="unique_enrollment",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.participant} ∈ {self.program}"
+
+
 class AttendanceRecord(models.Model):
     """Append-only record of a participant's attendance at a session.
 

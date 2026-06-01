@@ -63,11 +63,25 @@ class Program(TimestampedModel):
     )
     facilitators = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
+        through="core.ProgramFacilitator",
         related_name="facilitated_programs",
         limit_choices_to={"role": "facilitator"},
         blank=True,
     )
     is_archived = models.BooleanField(default=False)
+
+    # Session-guide pay defaults (set once at setup; see the session-guide ADR).
+    # The default length feeds pay-prep math; the default facilitator pre-fills the
+    # wrap screen's Facilitator of Record.
+    default_session_length_minutes = models.PositiveIntegerField(default=90)
+    default_facilitator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="default_for_programs",
+        limit_choices_to={"role": "facilitator"},
+    )
 
     def __str__(self) -> str:
         return self.name
@@ -86,6 +100,41 @@ class Program(TimestampedModel):
             raise ValidationError(
                 "Coordinator must belong to the same organization as the program."
             )
+
+
+class ProgramFacilitator(models.Model):
+    """Through-model for Program.facilitators carrying the per-(program, facilitator)
+    pay rate (see the session-guide ADR, D1/D2).
+
+    Rate lives on the assignment, not on the program or the person, so a senior lead
+    and a junior helper can be paid differently in the same program. ``hourly_rate_cents``
+    is nullable — an unset rate is *not* $0; pay-prep flags it. Money is integer cents.
+
+    Plain ``Model`` (not ``TimestampedModel``) and ``db_table``/``db_column`` adopt the
+    existing auto-created M2M table without data loss; the migration uses
+    ``SeparateDatabaseAndState`` to keep its rows.
+    """
+
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.CASCADE,
+        related_name="facilitator_links",
+    )
+    facilitator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        db_column="user_id",
+        related_name="program_links",
+        limit_choices_to={"role": "facilitator"},
+    )
+    hourly_rate_cents = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "core_program_facilitators"
+        unique_together = (("program", "facilitator"),)
+
+    def __str__(self) -> str:
+        return f"{self.facilitator} @ {self.program}"
 
 
 class Session(TimestampedModel):
